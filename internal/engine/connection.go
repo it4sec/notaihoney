@@ -381,7 +381,7 @@ func handleConnection(ctx context.Context, rt *serverRuntime, service *serviceRu
 				postFailureCapture(rr, rt)
 				return
 			}
-			if errors.Is(readErr, errConnectionLimit) {
+			if errors.Is(readErr, errConnectionLimit) || rr.counters.remaining(rr.maxConnBytes) <= 0 {
 				emitLimit(rt, service.id, connectionID, connectionIDText, evidence.LimitConnectionBytes, uint64(rt.cfg.Limits.MaxConnectionBytes))
 				closeReason = evidence.CloseLimitReached
 				closeReasonText = "connection_bytes"

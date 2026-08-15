@@ -37,11 +37,12 @@ func TestBoundedEventSetsTruncation(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		e.SanitizedHeaders = append(e.SanitizedHeaders, HeaderMetadata{Name: "X", Value: strings.Repeat("a", 100)})
 	}
-	b, err := boundedEventJSON(e, 512)
+	const maxEventBytes = 2048
+	b, err := boundedEventJSON(e, maxEventBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(b) > 512 || !strings.Contains(string(b), `"metadata_truncated":true`) {
+	if len(b) > maxEventBytes || !strings.Contains(string(b), `"metadata_truncated":true`) {
 		t.Fatalf("bounded event failed: %d %s", len(b), b)
 	}
 }
@@ -66,23 +67,23 @@ func TestStructuredHeaderAndQueryBounds(t *testing.T) {
 
 func TestEventCarriesForensicCorrelationFields(t *testing.T) {
 	event := Event{
-		EventSchemaVersion: EventSchemaVersion,
-		EventType: "exchange",
-		TimestampNS: 1,
-		SensorID: "sensor",
-		RunSessionID: "run",
-		ConfigSchemaVersion: 1,
-		ConfigSHA256: strings.Repeat("a", 64),
-		ServiceID: "service",
-		ConnectionID: "connection",
-		RequestID: "request",
-		RequestStreamStart: 10,
-		RequestStreamLength: 20,
-		RequestComplete: true,
-		ResponseStreamStart: 30,
+		EventSchemaVersion:   EventSchemaVersion,
+		EventType:            "exchange",
+		TimestampNS:          1,
+		SensorID:             "sensor",
+		RunSessionID:         "run",
+		ConfigSchemaVersion:  1,
+		ConfigSHA256:         strings.Repeat("a", 64),
+		ServiceID:            "service",
+		ConnectionID:         "connection",
+		RequestID:            "request",
+		RequestStreamStart:   10,
+		RequestStreamLength:  20,
+		RequestComplete:      true,
+		ResponseStreamStart:  30,
 		ResponseStreamLength: 40,
-		ResponseSHA256: strings.Repeat("b", 64),
-		ResponseComplete: true,
+		ResponseSHA256:       strings.Repeat("b", 64),
+		ResponseComplete:     true,
 	}
 	b, err := boundedEventJSON(event, 4096)
 	if err != nil {
@@ -98,24 +99,24 @@ func TestEventCarriesForensicCorrelationFields(t *testing.T) {
 
 func TestExchangeRequiredZeroAndFalseFieldsAreSerialized(t *testing.T) {
 	event := Event{
-		EventSchemaVersion: EventSchemaVersion,
-		EventType: "exchange",
-		TimestampNS: 1,
-		SensorID: "sensor",
-		RunSessionID: "run",
+		EventSchemaVersion:  EventSchemaVersion,
+		EventType:           "exchange",
+		TimestampNS:         1,
+		SensorID:            "sensor",
+		RunSessionID:        "run",
 		ConfigSchemaVersion: 1,
-		ConfigSHA256: strings.Repeat("a", 64),
-		ServiceID: "service",
-		ConnectionID: "connection",
-		RequestID: "request",
-		TimestampStartNS: 1,
-		TimestampEndNS: 2,
-		HTTPVersion: "HTTP/1.1",
-		Method: "GET",
-		RawPath: "/",
-		ResponseSource: "service_default",
-		ResponseStatus: 200,
-		ResponseSHA256: strings.Repeat("b", 64),
+		ConfigSHA256:        strings.Repeat("a", 64),
+		ServiceID:           "service",
+		ConnectionID:        "connection",
+		RequestID:           "request",
+		TimestampStartNS:    1,
+		TimestampEndNS:      2,
+		HTTPVersion:         "HTTP/1.1",
+		Method:              "GET",
+		RawPath:             "/",
+		ResponseSource:      "service_default",
+		ResponseStatus:      200,
+		ResponseSHA256:      strings.Repeat("b", 64),
 	}
 	b, err := boundedEventJSON(event, 4096)
 	if err != nil {

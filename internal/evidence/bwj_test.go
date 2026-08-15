@@ -112,6 +112,7 @@ func TestWriteFullZeroProgress(t *testing.T) {
 }
 
 type zeroWriter struct{}
+
 func (zeroWriter) Write([]byte) (int, error) { return 0, nil }
 
 func TestSerializedWriterProducesMonotonicRecordSequence(t *testing.T) {

@@ -71,24 +71,24 @@ func Run(ctx context.Context, cfg *config.Config, build BuildInfo) error {
 	}
 
 	rt := &serverRuntime{
-		cfg: cfg,
+		cfg:          cfg,
 		runSessionID: runSessionID,
-		bwj: bwj,
-		jsonl: jsonl,
-		tlsConfig: tlsConfig,
-		tlsMetadata: tlsMetadata,
-		globalSlots: make(chan struct{}, cfg.Limits.MaxConnectionsTotal),
-		fatalCh: make(chan error, 1),
-		active: make(map[net.Conn]struct{}),
+		bwj:          bwj,
+		jsonl:        jsonl,
+		tlsConfig:    tlsConfig,
+		tlsMetadata:  tlsMetadata,
+		globalSlots:  make(chan struct{}, cfg.Limits.MaxConnectionsTotal),
+		fatalCh:      make(chan error, 1),
+		active:       make(map[net.Conn]struct{}),
 	}
 	rt.jsonlHealthy.Store(true)
 
 	startupEvent := evidence.Event{
-		EventType: "sensor_state",
-		ApplicationVersion: build.ApplicationVersion,
-		GoVersion: runtime.Version(),
-		BuildID: build.BuildID,
-		TLSEnabled: tlsMetadata.Enabled,
+		EventType:            "sensor_state",
+		ApplicationVersion:   build.ApplicationVersion,
+		GoVersion:            runtime.Version(),
+		BuildID:              build.BuildID,
+		TLSEnabled:           tlsMetadata.Enabled,
 		TLSCertificateSHA256: tlsMetadata.CertificateSHA256,
 	}
 	if tlsMetadata.Enabled {
@@ -128,7 +128,7 @@ func Run(ctx context.Context, cfg *config.Config, build BuildInfo) error {
 	storageTicker := time.NewTicker(time.Second)
 	defer storageTicker.Stop()
 	var terminal error
-	selectLoop:
+selectLoop:
 	for {
 		select {
 		case <-ctx.Done():

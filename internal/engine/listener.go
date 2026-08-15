@@ -28,7 +28,8 @@ func bindConfiguredListeners(cfg *config.Config) ([]*serviceRuntime, error) {
 	sort.Strings(ids)
 	bound := make([]*serviceRuntime, 0, len(ids))
 	for _, id := range ids {
-		service := &cfg.Services[id]
+		serviceConfig := cfg.Services[id]
+		service := &serviceConfig
 		address := net.JoinHostPort(service.Listener.Address, strconv.Itoa(service.Listener.Port))
 		listener, err := net.Listen("tcp", address)
 		if err != nil {
@@ -38,10 +39,10 @@ func bindConfiguredListeners(cfg *config.Config) ([]*serviceRuntime, error) {
 			return nil, fmt.Errorf("LISTENER_BIND_FAILED service_id=%s address=%s: %w", id, address, err)
 		}
 		bound = append(bound, &serviceRuntime{
-			id: id,
-			cfg: service,
+			id:       id,
+			cfg:      service,
 			listener: listener,
-			slots: make(chan struct{}, cfg.Limits.MaxConnectionsPerService),
+			slots:    make(chan struct{}, cfg.Limits.MaxConnectionsPerService),
 		})
 	}
 	return bound, nil

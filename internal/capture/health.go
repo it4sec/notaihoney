@@ -42,11 +42,11 @@ func StartHealthServer(ctx context.Context, path, configSHA256, captureSessionID
 		return nil, fmt.Errorf("chmod capture health socket: %w", err)
 	}
 	s := &HealthServer{
-		path: path,
-		hash: configSHA256,
+		path:      path,
+		hash:      configSHA256,
 		sessionID: captureSessionID,
-		listener: listener,
-		leases: make(map[net.Conn]struct{}),
+		listener:  listener,
+		leases:    make(map[net.Conn]struct{}),
 	}
 	go s.acceptLoop(ctx)
 	return s, nil

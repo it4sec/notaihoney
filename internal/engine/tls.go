@@ -16,10 +16,10 @@ import (
 )
 
 type TLSMetadata struct {
-	Enabled        bool
+	Enabled           bool
 	CertificateSHA256 string
-	NotBefore      time.Time
-	NotAfter       time.Time
+	NotBefore         time.Time
+	NotAfter          time.Time
 }
 
 func LoadTLS(cfg *config.Config) (*tls.Config, TLSMetadata, error) {
@@ -49,17 +49,17 @@ func LoadTLS(cfg *config.Config) (*tls.Config, TLSMetadata, error) {
 	}
 	sum := sha256.Sum256(pair.Certificate[0])
 	metadata := TLSMetadata{
-		Enabled: true,
+		Enabled:           true,
 		CertificateSHA256: hex.EncodeToString(sum[:]),
-		NotBefore: leaf.NotBefore,
-		NotAfter: leaf.NotAfter,
+		NotBefore:         leaf.NotBefore,
+		NotAfter:          leaf.NotAfter,
 	}
 	return &tls.Config{
 		Certificates: []tls.Certificate{pair},
-		MinVersion: tls.VersionTLS12,
-		MaxVersion: tls.VersionTLS13,
-		NextProtos: []string{"http/1.1"},
-		ClientAuth: tls.NoClientCert,
+		MinVersion:   tls.VersionTLS12,
+		MaxVersion:   tls.VersionTLS13,
+		NextProtos:   []string{"http/1.1"},
+		ClientAuth:   tls.NoClientCert,
 	}, metadata, nil
 }
 

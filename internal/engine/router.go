@@ -57,16 +57,16 @@ func SelectResponse(service *config.Service, method, rawPath string, state *Rout
 			source = "route_default"
 		}
 		return Selection{
-			MatchedRoute: route.Method + " " + route.Path,
+			MatchedRoute:   route.Method + " " + route.Path,
 			Classification: route.Classification,
-			Source: source,
-			Sequence: sequence,
-			Plan: planFromResponse(service.DefaultHeaders, chosen, closeConnection),
+			Source:         source,
+			Sequence:       sequence,
+			Plan:           planFromResponse(service.DefaultHeaders, chosen, closeConnection),
 		}
 	}
 	return Selection{
 		Source: "service_default",
-		Plan: planFromFallback(service.DefaultHeaders, service.DefaultResponse, closeConnection),
+		Plan:   planFromFallback(service.DefaultHeaders, service.DefaultResponse, closeConnection),
 	}
 }
 
@@ -76,11 +76,11 @@ func planFromResponse(defaults map[string]string, r *config.ResponseConfig, clos
 		mode = "immediate"
 	}
 	plan := response.Plan{
-		Status: r.Status,
+		Status:  r.Status,
 		Headers: mergeHeaders(defaults, r.Headers),
-		Mode: mode,
-		Delay: time.Duration(r.DelayMS) * time.Millisecond,
-		Close: closeConnection,
+		Mode:    mode,
+		Delay:   time.Duration(r.DelayMS) * time.Millisecond,
+		Close:   closeConnection,
 	}
 	if r.Body != nil {
 		plan.Body = []byte(*r.Body)
@@ -97,11 +97,11 @@ func planFromResponse(defaults map[string]string, r *config.ResponseConfig, clos
 
 func planFromFallback(defaults map[string]string, r *config.FallbackResponse, closeConnection bool) response.Plan {
 	plan := response.Plan{
-		Status: r.Status,
+		Status:  r.Status,
 		Headers: mergeHeaders(defaults, r.Headers),
-		Mode: "immediate",
-		Delay: time.Duration(r.DelayMS) * time.Millisecond,
-		Close: closeConnection,
+		Mode:    "immediate",
+		Delay:   time.Duration(r.DelayMS) * time.Millisecond,
+		Close:   closeConnection,
 	}
 	if r.Body != nil {
 		plan.Body = []byte(*r.Body)

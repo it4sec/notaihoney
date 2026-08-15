@@ -100,12 +100,12 @@ func TestExactByteSHA256(t *testing.T) {
 
 func TestStrictYAMLRejections(t *testing.T) {
 	cases := map[string]string{
-		"duplicate": strings.Replace(validConfigYAML, "version: 1", "version: 1\nversion: 1", 1),
-		"unknown": strings.Replace(validConfigYAML, "sensor:\n", "unknown_top: true\nsensor:\n", 1),
-		"anchor": strings.Replace(validConfigYAML, "id: sensor-01", "id: &id sensor-01", 1),
-		"alias": strings.Replace(validConfigYAML, "product: example", "product: *id", 1),
-		"merge": strings.Replace(validConfigYAML, "global: {}", "global:\n  <<: {}", 1),
-		"custom_tag": strings.Replace(validConfigYAML, "id: sensor-01", "id: !custom sensor-01", 1),
+		"duplicate":     strings.Replace(validConfigYAML, "version: 1", "version: 1\nversion: 1", 1),
+		"unknown":       strings.Replace(validConfigYAML, "sensor:\n", "unknown_top: true\nsensor:\n", 1),
+		"anchor":        strings.Replace(validConfigYAML, "id: sensor-01", "id: &id sensor-01", 1),
+		"alias":         strings.Replace(validConfigYAML, "product: example", "product: *id", 1),
+		"merge":         strings.Replace(validConfigYAML, "global: {}", "global:\n  <<: {}", 1),
+		"custom_tag":    strings.Replace(validConfigYAML, "id: sensor-01", "id: !custom sensor-01", 1),
 		"multiple_docs": validConfigYAML + "\n---\nversion: 1\n",
 	}
 	for name, text := range cases {

@@ -91,25 +91,25 @@ type streams struct {
 
 type connectionRow struct {
 	connectionID string
-	sensorID string
+	sensorID     string
 	runSessionID string
 	configSHA256 string
-	serviceID string
-	openedAt int64
-	closedAt *int64
-	srcIP string
-	srcPort int
-	dstIP string
-	dstPort int
-	protocol string
-	bytesIn int64
-	bytesOut int64
+	serviceID    string
+	openedAt     int64
+	closedAt     *int64
+	srcIP        string
+	srcPort      int
+	dstIP        string
+	dstPort      int
+	protocol     string
+	bytesIn      int64
+	bytesOut     int64
 	requestCount int
-	closeReason string
+	closeReason  string
 }
 
 type exchangeRow struct {
-	event evidence.Event
+	event         evidence.Event
 	requestSHA256 string
 }
 
@@ -152,11 +152,11 @@ func Run(cfg *config.Config) error {
 		if _, ok := connections[event.ConnectionID]; !ok {
 			connections[event.ConnectionID] = connectionRow{
 				connectionID: event.ConnectionID,
-				sensorID: event.SensorID,
+				sensorID:     event.SensorID,
 				runSessionID: event.RunSessionID,
 				configSHA256: event.ConfigSHA256,
-				serviceID: event.ServiceID,
-				openedAt: event.TimestampStartNS,
+				serviceID:    event.ServiceID,
+				openedAt:     event.TimestampStartNS,
 			}
 		}
 	}
@@ -196,16 +196,16 @@ func readStructuredEvents(directory string) (map[string]connectionRow, []exchang
 			case "connection_open":
 				connections[event.ConnectionID] = connectionRow{
 					connectionID: event.ConnectionID,
-					sensorID: event.SensorID,
+					sensorID:     event.SensorID,
 					runSessionID: event.RunSessionID,
 					configSHA256: event.ConfigSHA256,
-					serviceID: event.ServiceID,
-					openedAt: event.TimestampNS,
-					srcIP: event.SourceIP,
-					srcPort: event.SourcePort,
-					dstIP: event.DestinationIP,
-					dstPort: event.DestinationPort,
-					protocol: event.ListenerProtocol,
+					serviceID:    event.ServiceID,
+					openedAt:     event.TimestampNS,
+					srcIP:        event.SourceIP,
+					srcPort:      event.SourcePort,
+					dstIP:        event.DestinationIP,
+					dstPort:      event.DestinationPort,
+					protocol:     event.ListenerProtocol,
 				}
 			case "connection_close":
 				row := connections[event.ConnectionID]
@@ -246,7 +246,7 @@ func reconstructStreams(directory string) (map[streamKey]streams, error) {
 	}
 	type item struct {
 		result evidence.ReadResult
-		path string
+		path   string
 	}
 	items := make([]item, 0, len(paths))
 	for _, path := range paths {

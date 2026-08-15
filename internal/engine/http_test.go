@@ -9,11 +9,11 @@ import (
 
 func TestRawPathFromTarget(t *testing.T) {
 	cases := map[string]string{
-		"/a/%2f/b?x=1": "/a/%2f/b",
+		"/a/%2f/b?x=1":                      "/a/%2f/b",
 		"http://example.invalid/a/../b?x=1": "/a/../b",
-		"http://example.invalid?x=1": "",
-		"example.invalid:443": "",
-		"*": "*",
+		"http://example.invalid?x=1":        "",
+		"example.invalid:443":               "",
+		"*":                                 "*",
 	}
 	for input, want := range cases {
 		if got := rawPathFromTarget(input); got != want {

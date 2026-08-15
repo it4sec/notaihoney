@@ -35,67 +35,67 @@ type QueryMetadata struct {
 }
 
 type Event struct {
-	EventSchemaVersion int    `json:"event_schema_version"`
-	EventType          string `json:"event_type"`
-	TimestampNS        int64  `json:"timestamp_ns"`
-	SensorID           string `json:"sensor_id"`
-	RunSessionID       string `json:"run_session_id"`
-	ConfigSchemaVersion int   `json:"config_schema_version"`
-	ConfigSHA256       string `json:"config_sha256"`
+	EventSchemaVersion  int    `json:"event_schema_version"`
+	EventType           string `json:"event_type"`
+	TimestampNS         int64  `json:"timestamp_ns"`
+	SensorID            string `json:"sensor_id"`
+	RunSessionID        string `json:"run_session_id"`
+	ConfigSchemaVersion int    `json:"config_schema_version"`
+	ConfigSHA256        string `json:"config_sha256"`
 
-	ServiceID   string `json:"service_id,omitempty"`
+	ServiceID    string `json:"service_id,omitempty"`
 	ConnectionID string `json:"connection_id,omitempty"`
 	RequestID    string `json:"request_id,omitempty"`
 
-	SourceIP        string `json:"source_ip,omitempty"`
-	SourcePort      int    `json:"source_port,omitempty"`
-	DestinationIP   string `json:"destination_ip,omitempty"`
-	DestinationPort int    `json:"destination_port,omitempty"`
+	SourceIP         string `json:"source_ip,omitempty"`
+	SourcePort       int    `json:"source_port,omitempty"`
+	DestinationIP    string `json:"destination_ip,omitempty"`
+	DestinationPort  int    `json:"destination_port,omitempty"`
 	ListenerProtocol string `json:"listener_protocol,omitempty"`
 
-	TimestampStartNS int64 `json:"timestamp_start_ns,omitempty"`
-	TimestampEndNS   int64 `json:"timestamp_end_ns,omitempty"`
-	HTTPVersion      string `json:"http_version,omitempty"`
-	Method           string `json:"method,omitempty"`
-	RequestTargetSanitized string `json:"request_target_sanitized,omitempty"`
-	RawPath          string `json:"raw_path,omitempty"`
-	QueryFields      []QueryMetadata `json:"query_fields,omitempty"`
-	SanitizedHeaders []HeaderMetadata `json:"sanitized_headers,omitempty"`
-	ContentType      string `json:"content_type,omitempty"`
-	DeclaredContentLength *int64 `json:"declared_content_length,omitempty"`
-	MatchedRoute     string `json:"matched_route,omitempty"`
-	Classification   string `json:"classification,omitempty"`
-	ResponseSource   string `json:"response_source,omitempty"`
-	ResponseSequence *int   `json:"response_sequence,omitempty"`
-	ResponseStatus   int    `json:"response_status,omitempty"`
-	RequestBytes     int64  `json:"request_bytes,omitempty"`
-	RequestStreamStart int64 `json:"request_stream_start,omitempty"`
-	RequestStreamLength int64 `json:"request_stream_length,omitempty"`
-	RequestComplete  bool   `json:"request_complete,omitempty"`
-	ResponseBytes    int64  `json:"response_bytes,omitempty"`
-	ResponseStreamStart int64 `json:"response_stream_start,omitempty"`
-	ResponseStreamLength int64 `json:"response_stream_length,omitempty"`
-	ResponseSHA256   string `json:"response_sha256,omitempty"`
-	ResponseComplete bool   `json:"response_complete,omitempty"`
-	WriteError       string `json:"write_error,omitempty"`
-	MetadataTruncated bool  `json:"metadata_truncated,omitempty"`
+	TimestampStartNS       int64            `json:"timestamp_start_ns,omitempty"`
+	TimestampEndNS         int64            `json:"timestamp_end_ns,omitempty"`
+	HTTPVersion            string           `json:"http_version,omitempty"`
+	Method                 string           `json:"method,omitempty"`
+	RequestTargetSanitized string           `json:"request_target_sanitized,omitempty"`
+	RawPath                string           `json:"raw_path,omitempty"`
+	QueryFields            []QueryMetadata  `json:"query_fields,omitempty"`
+	SanitizedHeaders       []HeaderMetadata `json:"sanitized_headers,omitempty"`
+	ContentType            string           `json:"content_type,omitempty"`
+	DeclaredContentLength  *int64           `json:"declared_content_length,omitempty"`
+	MatchedRoute           string           `json:"matched_route,omitempty"`
+	Classification         string           `json:"classification,omitempty"`
+	ResponseSource         string           `json:"response_source,omitempty"`
+	ResponseSequence       *int             `json:"response_sequence,omitempty"`
+	ResponseStatus         int              `json:"response_status,omitempty"`
+	RequestBytes           int64            `json:"request_bytes,omitempty"`
+	RequestStreamStart     int64            `json:"request_stream_start,omitempty"`
+	RequestStreamLength    int64            `json:"request_stream_length,omitempty"`
+	RequestComplete        bool             `json:"request_complete,omitempty"`
+	ResponseBytes          int64            `json:"response_bytes,omitempty"`
+	ResponseStreamStart    int64            `json:"response_stream_start,omitempty"`
+	ResponseStreamLength   int64            `json:"response_stream_length,omitempty"`
+	ResponseSHA256         string           `json:"response_sha256,omitempty"`
+	ResponseComplete       bool             `json:"response_complete,omitempty"`
+	WriteError             string           `json:"write_error,omitempty"`
+	MetadataTruncated      bool             `json:"metadata_truncated,omitempty"`
 
-	ApplicationVersion string `json:"application_version,omitempty"`
-	GoVersion          string `json:"go_version,omitempty"`
-	BuildID            string `json:"build_id,omitempty"`
-	TLSEnabled         bool   `json:"tls_enabled,omitempty"`
-	TLSCertificateSHA256 string `json:"tls_certificate_sha256,omitempty"`
+	ApplicationVersion      string `json:"application_version,omitempty"`
+	GoVersion               string `json:"go_version,omitempty"`
+	BuildID                 string `json:"build_id,omitempty"`
+	TLSEnabled              bool   `json:"tls_enabled,omitempty"`
+	TLSCertificateSHA256    string `json:"tls_certificate_sha256,omitempty"`
 	TLSCertificateNotBefore string `json:"tls_certificate_not_before,omitempty"`
-	TLSCertificateNotAfter string `json:"tls_certificate_not_after,omitempty"`
+	TLSCertificateNotAfter  string `json:"tls_certificate_not_after,omitempty"`
 
-	TLSErrorCode      string `json:"bounded_tls_error_code,omitempty"`
-	HandshakeElapsedMS int64 `json:"handshake_elapsed_ms,omitempty"`
-	OperationalCode   string `json:"operational_code,omitempty"`
-	OperationalAction string `json:"action,omitempty"`
-	CloseReason       string `json:"close_reason,omitempty"`
-	BytesIn           int64  `json:"bytes_in,omitempty"`
-	BytesOut          int64  `json:"bytes_out,omitempty"`
-	RequestCount      int    `json:"request_count,omitempty"`
+	TLSErrorCode       string `json:"bounded_tls_error_code,omitempty"`
+	HandshakeElapsedMS int64  `json:"handshake_elapsed_ms,omitempty"`
+	OperationalCode    string `json:"operational_code,omitempty"`
+	OperationalAction  string `json:"action,omitempty"`
+	CloseReason        string `json:"close_reason,omitempty"`
+	BytesIn            int64  `json:"bytes_in,omitempty"`
+	BytesOut           int64  `json:"bytes_out,omitempty"`
+	RequestCount       int    `json:"request_count,omitempty"`
 }
 
 // MarshalJSON keeps non-applicable fields compact for non-exchange events,
@@ -132,29 +132,29 @@ func (e Event) MarshalJSON() ([]byte, error) {
 		WriteError             string           `json:"write_error"`
 	}
 	return json.Marshal(exchangeEvent{
-		eventAlias: eventAlias(e),
-		TimestampStartNS: e.TimestampStartNS,
-		TimestampEndNS: e.TimestampEndNS,
-		HTTPVersion: e.HTTPVersion,
-		Method: e.Method,
+		eventAlias:             eventAlias(e),
+		TimestampStartNS:       e.TimestampStartNS,
+		TimestampEndNS:         e.TimestampEndNS,
+		HTTPVersion:            e.HTTPVersion,
+		Method:                 e.Method,
 		RequestTargetSanitized: e.RequestTargetSanitized,
-		RawPath: e.RawPath,
-		QueryFields: e.QueryFields,
-		SanitizedHeaders: e.SanitizedHeaders,
-		MatchedRoute: e.MatchedRoute,
-		Classification: e.Classification,
-		ResponseSource: e.ResponseSource,
-		ResponseStatus: e.ResponseStatus,
-		RequestBytes: e.RequestBytes,
-		RequestStreamStart: e.RequestStreamStart,
-		RequestStreamLength: e.RequestStreamLength,
-		RequestComplete: e.RequestComplete,
-		ResponseBytes: e.ResponseBytes,
-		ResponseStreamStart: e.ResponseStreamStart,
-		ResponseStreamLength: e.ResponseStreamLength,
-		ResponseSHA256: e.ResponseSHA256,
-		ResponseComplete: e.ResponseComplete,
-		WriteError: e.WriteError,
+		RawPath:                e.RawPath,
+		QueryFields:            e.QueryFields,
+		SanitizedHeaders:       e.SanitizedHeaders,
+		MatchedRoute:           e.MatchedRoute,
+		Classification:         e.Classification,
+		ResponseSource:         e.ResponseSource,
+		ResponseStatus:         e.ResponseStatus,
+		RequestBytes:           e.RequestBytes,
+		RequestStreamStart:     e.RequestStreamStart,
+		RequestStreamLength:    e.RequestStreamLength,
+		RequestComplete:        e.RequestComplete,
+		ResponseBytes:          e.ResponseBytes,
+		ResponseStreamStart:    e.ResponseStreamStart,
+		ResponseStreamLength:   e.ResponseStreamLength,
+		ResponseSHA256:         e.ResponseSHA256,
+		ResponseComplete:       e.ResponseComplete,
+		WriteError:             e.WriteError,
 	})
 }
 
@@ -267,17 +267,17 @@ func boundedEventJSON(event Event, maximum int) ([]byte, error) {
 	// Mandatory correlation fields are retained even under an unusually small
 	// operator bound; variable exchange metadata is discarded first.
 	minimal := Event{
-		EventSchemaVersion: event.EventSchemaVersion,
-		EventType: event.EventType,
-		TimestampNS: event.TimestampNS,
-		SensorID: event.SensorID,
-		RunSessionID: event.RunSessionID,
+		EventSchemaVersion:  event.EventSchemaVersion,
+		EventType:           event.EventType,
+		TimestampNS:         event.TimestampNS,
+		SensorID:            event.SensorID,
+		RunSessionID:        event.RunSessionID,
 		ConfigSchemaVersion: event.ConfigSchemaVersion,
-		ConfigSHA256: event.ConfigSHA256,
-		ServiceID: event.ServiceID,
-		ConnectionID: event.ConnectionID,
-		RequestID: event.RequestID,
-		MetadataTruncated: true,
+		ConfigSHA256:        event.ConfigSHA256,
+		ServiceID:           event.ServiceID,
+		ConnectionID:        event.ConnectionID,
+		RequestID:           event.RequestID,
+		MetadataTruncated:   true,
 	}
 	if event.EventType == "exchange" {
 		minimal.TimestampStartNS = event.TimestampStartNS

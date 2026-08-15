@@ -40,10 +40,10 @@ type SensorConfig struct {
 }
 
 type EvidenceConfig struct {
-	MinFreeBytes uint64          `yaml:"min_free_bytes"`
-	PCAP         PCAPConfig      `yaml:"pcap"`
-	WireJournal  RotationConfig  `yaml:"wire_journal"`
-	JSONL        RotationConfig  `yaml:"jsonl"`
+	MinFreeBytes uint64         `yaml:"min_free_bytes"`
+	PCAP         PCAPConfig     `yaml:"pcap"`
+	WireJournal  RotationConfig `yaml:"wire_journal"`
+	JSONL        RotationConfig `yaml:"jsonl"`
 }
 
 type PCAPConfig struct {
@@ -240,11 +240,11 @@ func inspectYAMLSyntax(data []byte) error {
 
 func requireTopLevelKeys(root *yaml.Node) error {
 	required := map[string]bool{
-		"version": false,
-		"global": false,
-		"sensor": false,
+		"version":  false,
+		"global":   false,
+		"sensor":   false,
 		"evidence": false,
-		"limits": false,
+		"limits":   false,
 		"services": false,
 	}
 	for i := 0; i < len(root.Content); i += 2 {
