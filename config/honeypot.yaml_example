@@ -107,7 +107,7 @@ services:
           - sequence: default
             status: 200
             response_mode: "immediate"
-            body: "{\"models\":[{\"name\":\"llama3.2:latest\",\"model\":\"llama3.2:latest\",\"modified_at\":\"2025-05-04T17:37:44.706015396-07:00\",\"size\":2019393189,\"digest\":\"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72\",\"details\":{\"parent_model\":\"\",\"format\":\"gguf\",\"family\":\"llama\",\"families\":[\"llama\"],\"parameter_size\":\"3.2B\",\"quantization_level\":\"Q4_K_M\"}}]}"
+            body: "__VERIFIED_FIXTURE_REQUIRED__"
 
       - method: "GET"
         path: "/api/ps"
@@ -116,7 +116,7 @@ services:
           - sequence: default
             status: 200
             response_mode: "immediate"
-            body: "{\"models\":[]}"
+            body: "__VERIFIED_FIXTURE_REQUIRED__"
 
       - method: "POST"
         path: "/api/show"
@@ -125,7 +125,7 @@ services:
           - sequence: default
             status: 200
             response_mode: "immediate"
-            body: "{\"parameters\":\"stop \\\"<|start_header_id|>\\\"\\nstop \\\"<|end_header_id|>\\\"\\nstop \\\"<|eot_id|>\\\"\",\"details\":{\"parent_model\":\"\",\"format\":\"gguf\",\"family\":\"llama\",\"families\":[\"llama\"],\"parameter_size\":\"3.2B\",\"quantization_level\":\"Q4_K_M\"},\"model_info\":{\"general.architecture\":\"llama\",\"llama.attention.head_count\":24,\"llama.attention.head_count_kv\":8,\"llama.attention.key_length\":128,\"llama.attention.layer_norm_rms_epsilon\":0.00001,\"llama.attention.value_length\":128,\"llama.block_count\":28,\"llama.context_length\":131072,\"llama.embedding_length\":3072,\"llama.feed_forward_length\":8192,\"llama.rope.dimension_count\":128,\"llama.rope.freq_base\":500000,\"llama.vocab_size\":128256,\"tokenizer.ggml.bos_token_id\":128000,\"tokenizer.ggml.eos_token_id\":128009,\"tokenizer.ggml.model\":\"gpt2\",\"tokenizer.ggml.pre\":\"llama-bpe\"},\"capabilities\":[\"completion\",\"tools\"]}"
+            body: "__VERIFIED_FIXTURE_REQUIRED__"
 
       - method: "POST"
         path: "/api/generate"
@@ -138,7 +138,7 @@ services:
               Content-Type: "application/x-ndjson"
             chunks:
               - delay_ms: 50
-                body: "{\"model\":\"llama3.2:latest\",\"created_at\":\"2025-07-07T20:22:19.193140Z\",\"response\":\"Hello\",\"done_reason\":\"stop\",\"done\":true,\"total_duration\":182242375,\"load_duration\":41295167,\"prompt_eval_count\":12,\"prompt_eval_duration\":24573166,\"eval_count\":2,\"eval_duration\":115959084}\n"
+                body: "__VERIFIED_FIXTURE_REQUIRED__\n"
 
       - method: "POST"
         path: "/api/chat"
@@ -151,7 +151,7 @@ services:
               Content-Type: "application/x-ndjson"
             chunks:
               - delay_ms: 50
-                body: "{\"model\":\"llama3.2:latest\",\"created_at\":\"2025-07-07T20:22:19.193140Z\",\"message\":{\"role\":\"assistant\",\"content\":\"Hello\"},\"done_reason\":\"stop\",\"done\":true,\"total_duration\":182242375,\"load_duration\":41295167,\"prompt_eval_count\":12,\"prompt_eval_duration\":24573166,\"eval_count\":2,\"eval_duration\":115959084}\n"
+                body: "__VERIFIED_FIXTURE_REQUIRED__\n"
 
     default_response:
       status: 404
