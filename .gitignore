@@ -12,8 +12,9 @@
 logs/
 *.log
 
-# Tests
+# Tests & Packages
 tests/
+package/
 
 # Architecture
 architecture/
