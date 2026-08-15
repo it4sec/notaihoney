@@ -1,0 +1,34 @@
+[Unit]
+Description=notAIhoney serving daemon
+After=network-online.target notaihoney-capture.service
+Requires=notaihoney-capture.service
+
+[Service]
+Type=simple
+User=notaihoney
+Group=notaihoney
+ExecStart=/usr/local/bin/notaihoney serve --config /etc/notaihoney/honeypot.yaml
+Restart=on-failure
+RestartSec=2s
+UMask=0077
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+AmbientCapabilities=
+ReadOnlyPaths=/etc/notaihoney
+ReadWritePaths=/var/lib/notaihoney/journal /var/lib/notaihoney/events
+InaccessiblePaths=/var/lib/notaihoney/pcap /var/lib/notaihoney/index
+
+[Install]
+WantedBy=multi-user.target

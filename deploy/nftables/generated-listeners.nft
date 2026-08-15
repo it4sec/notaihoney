@@ -1,0 +1,9 @@
+# GENERATED DEPLOYMENT ARTIFACT — DO NOT MAINTAIN PORTS MANUALLY.
+#
+# Generate the listener data from:
+#   notaihoney check --config /etc/notaihoney/honeypot.yaml --emit-listeners=json
+# and render the validated TCP ports into the nftables set below.
+#
+# The repository copy is intentionally empty so honeypot.yaml remains the only
+# source of listener-port truth.
+elements = { }

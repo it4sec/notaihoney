@@ -1,0 +1,35 @@
+[Unit]
+Description=notAIhoney packet capture supervisor
+After=network-online.target
+Before=notaihoney.service
+
+[Service]
+Type=simple
+User=notaihoney-capture
+Group=notaihoney
+ExecStart=/usr/local/bin/notaihoney capture --config /etc/notaihoney/honeypot.yaml
+Restart=on-failure
+RestartSec=2s
+UMask=0007
+RuntimeDirectory=notaihoney
+RuntimeDirectoryMode=0750
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+RestrictAddressFamilies=AF_PACKET AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN
+AmbientCapabilities=CAP_NET_RAW CAP_NET_ADMIN
+ReadOnlyPaths=/etc/notaihoney/honeypot.yaml
+ReadWritePaths=/var/lib/notaihoney/pcap /run/notaihoney
+InaccessiblePaths=/etc/notaihoney/tls /var/lib/notaihoney/journal /var/lib/notaihoney/events /var/lib/notaihoney/index
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,22 @@
+# Python
+
+# Virtual env
+.venv/
+.env/
+
+# Secrets
+.env
+*.env
+
+# Logs
+logs/
+*.log
+
+# Tests
+tests/
+
+# Architecture
+architecture/
+
+# Config
+git.sh

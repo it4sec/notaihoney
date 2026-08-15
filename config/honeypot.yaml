@@ -1,0 +1,171 @@
+version: 1
+
+# ---------------------------------------------------------------------------
+# GLOBAL SETTINGS
+# ---------------------------------------------------------------------------
+
+global:
+  tls:
+    directory: "/etc/notaihoney/tls"
+
+sensor:
+  id: "sensor-01"
+
+# ---------------------------------------------------------------------------
+# EVIDENCE
+# PCAPNG, BWJ and JSONL are mandatory Milestone 1 evidence subsystems.
+# They intentionally have no enabled switches.
+# ---------------------------------------------------------------------------
+
+evidence:
+  min_free_bytes: 5368709120
+
+  pcap:
+    interface: "eth0"
+    directory: "/var/lib/notaihoney/pcap"
+    rotate_size_bytes: 268435456
+    rotate_seconds: 3600
+
+  wire_journal:
+    directory: "/var/lib/notaihoney/journal"
+    rotate_size_bytes: 268435456
+    rotate_seconds: 3600
+
+  jsonl:
+    directory: "/var/lib/notaihoney/events"
+    rotate_size_bytes: 67108864
+    rotate_seconds: 3600
+
+# ---------------------------------------------------------------------------
+# RESOURCE LIMITS
+# ---------------------------------------------------------------------------
+
+limits:
+  max_connections_total: 1024
+  max_connections_per_service: 256
+
+  max_requests_per_connection: 1000
+  max_connection_lifetime_seconds: 3600
+  max_connection_bytes: 67108864
+
+  max_header_bytes: 32768
+  max_body_bytes: 4194304
+  max_response_bytes: 4194304
+
+  max_structured_event_bytes: 262144
+  max_structured_headers: 128
+  max_query_fields: 128
+
+  tls_handshake_timeout_seconds: 5
+  header_timeout_seconds: 5
+  body_timeout_seconds: 15
+  write_timeout_seconds: 15
+  idle_timeout_seconds: 30
+
+  max_stream_seconds: 60
+
+  max_post_failure_capture_bytes: 4194304
+  post_failure_capture_timeout_seconds: 5
+
+# ===========================================================================
+# SIMULATED SERVICES
+# Milestone 1 personality: Ollama
+# Product-specific behavior remains entirely YAML-defined.
+# ===========================================================================
+
+services:
+  ollama:
+    enabled: true
+
+    listener:
+      address: "0.0.0.0"
+      port: 11434
+      protocol: "http"
+
+    identity:
+      product: "ollama"
+      variant: "default"
+
+    default_headers:
+      Content-Type: "application/json"
+
+    routes:
+      - method: "GET"
+        path: "/api/version"
+        classification: "version_discovery"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            body: |
+              {"version":"0.11.4"}
+
+      - method: "GET"
+        path: "/api/tags"
+        classification: "model_discovery"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            body: "__VERIFIED_FIXTURE_REQUIRED__"
+
+      - method: "GET"
+        path: "/api/ps"
+        classification: "model_discovery"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            body: "__VERIFIED_FIXTURE_REQUIRED__"
+
+      - method: "POST"
+        path: "/api/show"
+        classification: "metadata_discovery"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            body: "__VERIFIED_FIXTURE_REQUIRED__"
+
+      - method: "POST"
+        path: "/api/generate"
+        classification: "inference_attempt"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "ndjson"
+            headers:
+              Content-Type: "application/x-ndjson"
+            chunks:
+              - delay_ms: 50
+                body: "__VERIFIED_FIXTURE_REQUIRED__\n"
+
+      - method: "POST"
+        path: "/api/chat"
+        classification: "inference_attempt"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "ndjson"
+            headers:
+              Content-Type: "application/x-ndjson"
+            chunks:
+              - delay_ms: 50
+                body: "__VERIFIED_FIXTURE_REQUIRED__\n"
+
+    default_response:
+      status: 404
+      headers:
+        Content-Type: "application/json"
+      body: |
+        {"error":"404 page not found"}
+
+# ---------------------------------------------------------------------------
+# OPTIONAL OFFLINE ANALYSIS
+# Used only by: notaihoney index
+# The live serve path does not depend on SQLite.
+# ---------------------------------------------------------------------------
+
+analysis:
+  sqlite:
+    path: "/var/lib/notaihoney/index/honeypot.db"

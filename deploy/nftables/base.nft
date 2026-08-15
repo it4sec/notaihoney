@@ -1,0 +1,31 @@
+#!/usr/sbin/nft -f
+
+# Static notAIhoney network-isolation baseline. Listener ports are loaded from
+# generated-listeners.nft, which must be produced from validated
+# `notaihoney check --emit-listeners=json` output.
+
+table inet notaihoney {
+    set listener_ports {
+        type inet_service
+        flags interval
+        include "/etc/notaihoney/generated-listeners.nft"
+    }
+
+    chain input {
+        type filter hook input priority 0; policy drop;
+        iifname "lo" accept
+        ct state established,related accept
+        tcp dport @listener_ports accept
+    }
+
+    chain output {
+        type filter hook output priority 0; policy accept;
+
+        # Replies on connections initiated by remote clients remain possible.
+        meta skuid "notaihoney" ct state established,related accept
+
+        # The serving identity may not originate new IP traffic. This blocks
+        # new outbound TCP as well as UDP/DNS and other attacker-driven egress.
+        meta skuid "notaihoney" ct state new drop
+    }
+}

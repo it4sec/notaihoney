@@ -1,183 +1,47 @@
-=# notAIhoney
+# notAIhoney
 
-**notAIhoney** is a modular Linux honeypot for exposed AI inference and model-serving HTTP/HTTPS APIs.
+`notAIhoney` is a small Linux honeypot for exposed AI model-serving HTTP APIs. It receives attacker traffic, preserves forensic evidence, parses and classifies requests, and returns YAML-defined synthetic responses without executing attacker intent or performing real model inference.
 
-It is designed as a forensic and security-research sensor that impersonates AI-serving products, records interaction with them, and returns synthetic responses — without running a real LLM or executing attacker-controlled actions.
-
-**Owner:** Denis Laskov  
-**Year:** 2026  
-**Status:** Work in progress  
-**License:** Free for personal use
-
-## Architecture
-
-The project follows one core rule:
-
-> **Go implements the generic honeypot engine; one YAML file defines all simulated AI services.**
-
-The Go engine remains product-independent. All service-specific behavior — routes, responses, model information, headers, errors, delays, streaming behavior, and classifications — is defined in:
+Milestone 1 implements one Go executable with four modes:
 
 ```text
-config/honeypot.yaml
+notaihoney serve   --config /etc/notaihoney/honeypot.yaml
+notaihoney capture --config /etc/notaihoney/honeypot.yaml
+notaihoney check   --config /etc/notaihoney/honeypot.yaml
+notaihoney index   --config /etc/notaihoney/honeypot.yaml
 ```
 
-A new AI service should normally be added by extending the YAML configuration without changing Go code.
-
-## Initial Scope
-
-The first milestone simulates **Ollama** on its standard HTTP API surface, including:
+Validated listener data for firewall generation is exported with:
 
 ```text
-GET  /api/version
-GET  /api/tags
-GET  /api/ps
-POST /api/show
-POST /api/generate
-POST /api/chat
+notaihoney check --config /etc/notaihoney/honeypot.yaml --emit-listeners=json
 ```
 
-Future YAML-defined services may include:
+## Design
 
-- vLLM
-- NVIDIA NIM
-- Hugging Face TGI
-- llama.cpp server
-- NVIDIA Triton
-- TensorFlow Serving
-- KServe-compatible APIs
+- One strict YAML configuration file controls service identities, listeners, routes, classifications, response data, sequences and timing.
+- Production Go code contains only generic mechanisms and no product-specific routing behavior.
+- Live evidence is PCAPNG + Binary Wire Journal (BWJ) + bounded JSONL.
+- BWJ records inbound plaintext before the Go HTTP parser may consume it.
+- SQLite is an optional offline index built from preserved JSONL and BWJ evidence.
+- Packet capture is a separate process mode supervised through `/run/notaihoney/capture.sock`; serving fails closed if capture readiness is absent or lost.
+- Plain HTTP supports HTTP/1.0 and HTTP/1.1. HTTPS uses TLS 1.2–1.3 and application HTTP/1.1 only.
+- The serving process never proxies, downloads, invokes shells, runs attacker-controlled commands, or initiates attacker-controlled outbound connections.
 
-Initial protocol support is **HTTP/1.1 and HTTPS**. HTTP/2 and gRPC may be added later when required for service fidelity.
+## Configuration
 
-## How It Works
+The repository configuration is `config/honeypot.yaml`; the production location is `/etc/notaihoney/honeypot.yaml`.
 
-```text
-Internet
-   |
-   +----> dumpcap ----> PCAPNG
-   |
-   v
-honeypotd
-   |
-   v
-HTTP / HTTPS
-   |
-   v
-Raw Request Recording
-   |
-   v
-Generic Request Matcher
-   |
-   v
-config/honeypot.yaml
-   |
-   v
-Generic Response Engine
-   |
-   +----> Immediate JSON
-   +----> NDJSON streaming
-   +----> SSE streaming
-   |
-   v
-Raw Response Recording
-   |
-   v
-Client
-```
+The exact bytes of the YAML file are SHA-256 hashed as `config_sha256`. Comments and whitespace are therefore part of the configuration revision identity.
 
-## Evidence Collection
+Some Milestone 1 service responses intentionally retain `__VERIFIED_FIXTURE_REQUIRED__`. Those markers are data-level placeholders for externally verified response fixtures; the generic engine does not special-case them.
 
-notAIhoney prioritizes forensic preservation and records activity at multiple levels:
+## Evidence
 
-- **PCAPNG** — authoritative network-level capture using `dumpcap`
-- **Binary wire journal** — exact inbound and outbound application bytes
-- **JSONL** — structured forensic events
-- **SQLite** — optional local analytical index
+PCAPNG captures network-level traffic. BWJ stores exact plaintext application bytes processed by the daemon. JSONL stores bounded structured interpretation with sensitive header/query values represented safely rather than duplicated as raw secrets. `notaihoney index` reconstructs BWJ streams and derives request SHA-256 values offline.
 
-Correlation IDs link connections, requests, responses, and evidence across these sources.
+Evidence is never automatically deleted, overwritten, or purged to recover disk space.
 
-## Security Model
+## Deployment
 
-The honeypot records and synthetically responds to hostile activity but never performs the requested operation.
-
-It must never provide:
-
-- real LLM inference
-- shell or command execution
-- tool execution
-- model downloads
-- attacker-controlled URL fetching
-- callbacks
-- arbitrary outbound HTTP or DNS
-- arbitrary file execution
-- access to production systems
-- outbound proxy functionality
-
-The processing model is always:
-
-```text
-receive
-  ↓
-record
-  ↓
-parse
-  ↓
-match configuration
-  ↓
-synthetically respond
-  ↓
-record
-```
-
-## Project Structure
-
-```text
-notAIhoney/
-├── cmd/
-│   └── honeypotd/
-│       └── main.go
-├── internal/
-│   ├── engine/
-│   ├── config/
-│   ├── response/
-│   └── evidence/
-├── config/
-│   └── honeypot.yaml
-├── tests/
-├── go.mod
-├── go.sum
-├── README.md
-└── LICENSE
-```
-
-## Requirements
-
-- Linux
-- Go
-- `dumpcap`
-- persistent local storage
-
-No GPU, LLM runtime, Docker, Kubernetes, Redis, Kafka, or PostgreSQL is required.
-
-The minimum performance target is:
-
-```text
->= 5 requests/second per exposed port
-```
-
-## Design Principle
-
-The architectural test for the project is simple:
-
-> **Can a new AI HTTP service be added by changing only `config/honeypot.yaml`?**
-
-If a Go change is required, it should introduce only a reusable generic engine capability — never product-specific behavior.
-
-**Keep Go minimal and generic. Keep simulated service behavior in YAML. Record everything. Execute nothing.**
-
-## License
-
-Copyright © 2026 Denis Laskov.
-
-Free for personal, non-commercial use. Commercial use or redistribution as part of a commercial product or service requires explicit permission from the owner.
-
-The software is provided as-is, without warranty.
+Reference systemd units and nftables files live under `deploy/`. The serving and capture identities are intentionally separated. Listener ports in nftables must be generated from validated listener export rather than manually copied from YAML.
