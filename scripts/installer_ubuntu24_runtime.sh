@@ -33,6 +33,9 @@ SERVE_USER="notaihoney"
 SERVE_GROUP="notaihoney"
 CAPTURE_USER="notaihoney-capture"
 CAPTURE_GROUP="notaihoney-capture"
+# Capture storage keeps its dedicated group, while the running capture service
+# uses the serving group for controlled access to /run/notaihoney/capture.sock.
+CAPTURE_RUNTIME_GROUP="$SERVE_GROUP"
 
 INSTALL_ROOT="/etc/notaihoney"
 TLS_DIR="${INSTALL_ROOT}/tls"
@@ -783,6 +786,37 @@ printf \
     '[ERROR] capture service did not report READY with the installed configuration SHA-256.\n' \
     >&2
 
+RUNTIME_DIR="$(dirname "$SOCKET")"
+
+if [[ -d "$RUNTIME_DIR" ]]; then
+    printf '[DIAG] runtime directory: ' >&2
+    stat -c '%A %U:%G %n' "$RUNTIME_DIR" >&2 || true
+else
+    printf '[DIAG] runtime directory missing: %s\n' "$RUNTIME_DIR" >&2
+fi
+
+if [[ -S "$SOCKET" ]]; then
+    printf '[DIAG] capture socket: ' >&2
+    stat -c '%A %U:%G %n' "$SOCKET" >&2 || true
+else
+    printf '[DIAG] capture socket missing: %s\n' "$SOCKET" >&2
+fi
+
+if [[ -x "$RUNTIME_DIR" ]]; then
+    printf '[DIAG] current identity can traverse runtime directory: yes\n' >&2
+else
+    printf '[DIAG] current identity can traverse runtime directory: no\n' >&2
+fi
+
+if [[ -S "$SOCKET" ]]; then
+    FINAL_RESPONSE="$(
+        printf 'HEALTH\n' \
+            | timeout 2 socat - "UNIX-CONNECT:${SOCKET}" 2>&1 \
+            || true
+    )"
+    printf '[DIAG] final HEALTH attempt: %s\n' "${FINAL_RESPONSE:-<no response>}" >&2
+fi
+
 exit 1
 EOF_READY
 
@@ -840,7 +874,7 @@ install -d \
 cat >"$CAPTURE_DROPIN" <<EOF_CAPTURE
 [Service]
 User=${CAPTURE_USER}
-Group=${CAPTURE_GROUP}
+Group=${CAPTURE_RUNTIME_GROUP}
 
 NoNewPrivileges=true
 
@@ -946,17 +980,31 @@ CAPTURE_RESTRICT_AF="$(
     systemctl show "$CAPTURE_UNIT" -p RestrictAddressFamilies --value 2>/dev/null || true
 )"
 
+CAPTURE_RUNTIME_DIRECTORY="$(
+    systemctl show "$CAPTURE_UNIT" -p RuntimeDirectory --value 2>/dev/null || true
+)"
+
+CAPTURE_RUNTIME_MODE="$(
+    systemctl show "$CAPTURE_UNIT" -p RuntimeDirectoryMode --value 2>/dev/null || true
+)"
+
 [[ "$CAPTURE_EFFECTIVE_USER" == "$CAPTURE_USER" ]] || \
     die "$CAPTURE_UNIT effective User= is '$CAPTURE_EFFECTIVE_USER'."
 
-[[ "$CAPTURE_EFFECTIVE_GROUP" == "$CAPTURE_GROUP" ]] || \
-    die "$CAPTURE_UNIT effective Group= is '$CAPTURE_EFFECTIVE_GROUP'."
+[[ "$CAPTURE_EFFECTIVE_GROUP" == "$CAPTURE_RUNTIME_GROUP" ]] || \
+    die "$CAPTURE_UNIT effective Group= is '$CAPTURE_EFFECTIVE_GROUP'; expected '$CAPTURE_RUNTIME_GROUP'."
 
 [[ "$CAPTURE_NNP" == "yes" ]] || \
     die "$CAPTURE_UNIT effective NoNewPrivileges= is '$CAPTURE_NNP'."
 
 [[ "$CAPTURE_PRIVATE_NETWORK" != "yes" ]] || \
     die "$CAPTURE_UNIT has PrivateNetwork=yes, which conflicts with host packet capture."
+
+grep -qw 'notaihoney' <<<"$CAPTURE_RUNTIME_DIRECTORY" || \
+    die "$CAPTURE_UNIT RuntimeDirectory does not include notaihoney: $CAPTURE_RUNTIME_DIRECTORY"
+
+[[ -n "$CAPTURE_RUNTIME_MODE" ]] || \
+    die "$CAPTURE_UNIT RuntimeDirectoryMode is not defined."
 
 CAPTURE_BOUNDING_LC="${CAPTURE_BOUNDING,,}"
 CAPTURE_AMBIENT_LC="${CAPTURE_AMBIENT,,}"
@@ -988,6 +1036,9 @@ if [[ -n "$CAPTURE_RESTRICT_AF" ]]; then
 
     grep -qw 'AF_UNIX' <<<"$CAPTURE_RESTRICT_AF" || \
         die "$CAPTURE_UNIT RestrictAddressFamilies is missing AF_UNIX for capture.sock."
+
+    grep -qw 'AF_NETLINK' <<<"$CAPTURE_RESTRICT_AF" || \
+        die "$CAPTURE_UNIT RestrictAddressFamilies is missing AF_NETLINK for Go network-interface lookup."
 
 fi
 
@@ -1359,7 +1410,12 @@ printf \
     "$SERVE_GROUP"
 
 printf \
-    '    capture identity:    %s:%s\n' \
+    '    capture runtime:     %s:%s\n' \
+    "$CAPTURE_USER" \
+    "$CAPTURE_RUNTIME_GROUP"
+
+printf \
+    '    PCAP ownership:      %s:%s\n' \
     "$CAPTURE_USER" \
     "$CAPTURE_GROUP"
 
