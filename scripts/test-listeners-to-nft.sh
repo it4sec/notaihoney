@@ -88,6 +88,21 @@ run_success \
     '{"listeners":[{"service_id":"secure-service","address":"0.0.0.0","port":443,"protocol":"https"}]}' \
     $'elements = { 443 }\n'
 
+run_success \
+    'valid loopback IPv4 address is accepted structurally' \
+    '{"listeners":[{"service_id":"loopback-service","address":"127.0.0.1","port":8081,"protocol":"http"}]}' \
+    $'elements = { 8081 }\n'
+
+run_success \
+    'valid specific IPv4 address is accepted structurally' \
+    '{"listeners":[{"service_id":"specific-service","address":"192.168.1.10","port":8082,"protocol":"https"}]}' \
+    $'elements = { 8082 }\n'
+
+run_success \
+    'missing optional SHA-256 metadata is accepted' \
+    '{"listeners":[{"service_id":"no-hash","address":"10.0.0.5","port":8083,"protocol":"http"}]}' \
+    $'elements = { 8083 }\n'
+
 mixed_http_https='{"listeners":[
   {"service_id":"http-service","address":"0.0.0.0","port":8080,"protocol":"http"},
   {"service_id":"https-service","address":"0.0.0.0","port":8443,"protocol":"https"}
@@ -132,7 +147,10 @@ run_failure 'negative port' '{"listeners":[{"service_id":"x","address":"0.0.0.0"
 run_failure 'non-numeric port' '{"listeners":[{"service_id":"x","address":"0.0.0.0","port":"11434","protocol":"http"}]}'
 run_failure 'unsupported protocol' '{"listeners":[{"service_id":"x","address":"0.0.0.0","port":11434,"protocol":"udp"}]}'
 run_failure 'invalid address' '{"listeners":[{"service_id":"x","address":"999.0.0.1","port":11434,"protocol":"http"}]}'
+run_failure 'malformed address' '{"listeners":[{"service_id":"x","address":"127.0.0","port":11434,"protocol":"http"}]}'
+run_failure 'ambiguous leading-zero address' '{"listeners":[{"service_id":"x","address":"010.0.0.1","port":11434,"protocol":"http"}]}'
 run_failure 'unexpected input structure' '{"listeners":{"service_id":"x","address":"0.0.0.0","port":11434,"protocol":"http"}}'
+run_failure 'unexpected top-level field' '{"listeners":[{"service_id":"x","address":"0.0.0.0","port":11434,"protocol":"http"}],"extra":true}'
 run_failure 'unexpected listener field' '{"listeners":[{"service_id":"x","address":"0.0.0.0","port":11434,"protocol":"http","extra":true}]}'
 run_failure 'injection-style port value' '{"listeners":[{"service_id":"x","address":"0.0.0.0","port":"11434; flush ruleset","protocol":"http"}]}'
 run_failure 'injection-style address value' '{"listeners":[{"service_id":"x","address":"0.0.0.0; flush ruleset","port":11434,"protocol":"http"}]}'
@@ -147,13 +165,39 @@ else
     fail 'logically equivalent listener ordering is byte-for-byte identical'
 fi
 
+# Explicit output-contract checks. The generator owns only set contents; it must
+# not emit chain rules or complete nftables table/chain definitions.
+contract_file="$TMP_ROOT/output-contract.nft"
+if printf '%s' "$multiple" | "$SCRIPT" >"$contract_file"; then
+    if grep -Eq '^elements = \{ [0-9]+(, [0-9]+)* \}$' "$contract_file"; then
+        pass 'output contract uses elements = { ... } set fragment'
+    else
+        fail 'output contract uses elements = { ... } set fragment'
+    fi
+
+    if grep -Eq 'tcp[[:space:]]+dport[[:space:]]*\{' "$contract_file"; then
+        fail 'output contract does not emit tcp dport accept rules'
+    else
+        pass 'output contract does not emit tcp dport accept rules'
+    fi
+
+    if grep -Eq '^[[:space:]]*(table|chain)[[:space:]]' "$contract_file"; then
+        fail 'output contract does not emit table or chain definitions'
+    else
+        pass 'output contract does not emit table or chain definitions'
+    fi
+else
+    fail 'could not generate output-contract fixture'
+fi
+
 # Project integration check. This validates the generated fragment in the exact
 # syntactic context where the supplied base.nft includes generated-listeners.nft.
 #
 # The production base.nft uses an absolute /etc/notaihoney include path. To keep
-# this test non-destructive, make a temporary copy of base.nft and rewrite only
-# that include path to a temporary generated fragment. The surrounding nftables
-# table/set/chain structure remains unchanged.
+# this test non-destructive while exercising nft's include-directory mechanism,
+# copy base.nft into a temporary include directory and rewrite only that one
+# include to the basename generated-listeners.nft. The surrounding nftables
+# structure remains unchanged.
 default_base_nft="$PROJECT_ROOT/deploy/nftables/base.nft"
 BASE_NFT=${BASE_NFT:-$default_base_nft}
 
@@ -161,18 +205,21 @@ if [[ -f $BASE_NFT ]]; then
     if ! command -v nft >/dev/null 2>&1; then
         fail 'nft integration check requested but nft is not installed'
     else
-        integration_base="$TMP_ROOT/base.integration.nft"
-        integration_generated="$TMP_ROOT/generated-listeners.nft"
+        integration_dir="$TMP_ROOT/nft-integration"
+        integration_base="$integration_dir/base.nft"
+        integration_generated="$integration_dir/generated-listeners.nft"
         integration_error="$TMP_ROOT/integration-rewrite.error"
+
+        mkdir -p "$integration_dir"
 
         if ! printf '%s' "$multiple" | "$SCRIPT" >"$integration_generated"; then
             fail 'failed to generate fragment for nft integration check'
-        elif ! awk -v generated="$integration_generated" '
+        elif ! awk '
             BEGIN { replacements = 0 }
             /^[[:space:]]*include[[:space:]]+"\/etc\/notaihoney\/generated-listeners\.nft"[[:space:]]*$/ {
                 indent = $0
                 sub(/include.*/, "", indent)
-                print indent "include \"" generated "\""
+                print indent "include \"generated-listeners.nft\""
                 replacements++
                 next
             }
@@ -185,10 +232,10 @@ if [[ -f $BASE_NFT ]]; then
             }
         ' "$BASE_NFT" >"$integration_base" 2>"$integration_error"; then
             fail "could not prepare base.nft integration copy: $(<"$integration_error")"
-        elif nft -c -f "$integration_base"; then
-            pass 'generated set fragment passes nft -c in supplied base.nft include context'
+        elif nft -c -I "$integration_dir" -f "$integration_base"; then
+            pass 'generated set fragment passes nft -c -I in supplied base.nft include context'
         else
-            fail 'generated set fragment failed nft -c in supplied base.nft include context'
+            fail 'generated set fragment failed nft -c -I in supplied base.nft include context'
         fi
     fi
 else

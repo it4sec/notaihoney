@@ -11,6 +11,9 @@ require_jq() {
     command -v jq >/dev/null 2>&1 || error 'Required dependency not found: jq'
 }
 
+# Structural validation only. Listener binding/exposure semantics are owned by
+# honeypot.yaml and the Go application. This generator intentionally accepts any
+# canonical IPv4 address from the validated export and remains port-set based.
 validate_ipv4_address() {
     local address=$1
     local octet
