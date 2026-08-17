@@ -16,7 +16,8 @@
 #   notaihoney.sha256
 #   server.crt
 #   server.key
-#   listeners-to-nft
+#   scripts/listeners-to-nft.sh
+#   scripts/test-listeners-to-nft.sh   # development/test helper; not installed
 #
 # By default the installer validates, starts, and enables both services.
 # It does not apply nftables automatically because host-management access
@@ -224,7 +225,10 @@ done
 # ├── config/honeypot.yaml
 # ├── deploy/systemd/notaihoney.service
 # ├── deploy/systemd/notaihoney-capture.service
-# └── deploy/nftables/base.nft
+# ├── deploy/nftables/base.nft
+# └── scripts/
+#     ├── listeners-to-nft.sh
+#     └── test-listeners-to-nft.sh
 # ---------------------------------------------------------------------------
 
 BUNDLE_DIR="$PWD"
@@ -245,7 +249,7 @@ SHA256_BUNDLE="${BUNDLE_DIR}/notaihoney.sha256"
 TLS_CERT_BUNDLE="${BUNDLE_DIR}/server.crt"
 TLS_KEY_BUNDLE="${BUNDLE_DIR}/server.key"
 
-NFT_GENERATOR_BUNDLE="${BUNDLE_DIR}/listeners-to-nft"
+NFT_GENERATOR_BUNDLE="${BUNDLE_DIR}/scripts/listeners-to-nft.sh"
 
 # ---------------------------------------------------------------------------
 # 1. Validate platform and release bundle
@@ -298,7 +302,7 @@ fi
 
 if [[ -e "$NFT_GENERATOR_BUNDLE" && ! -f "$NFT_GENERATOR_BUNDLE" ]]; then
 
-    die "listeners-to-nft exists but is not a regular file."
+    die "scripts/listeners-to-nft.sh exists but is not a regular file."
 
 fi
 
@@ -765,7 +769,7 @@ for _ in $(seq 1 30); do
                 || true
         )"
 
-        read -r STATE HASH SESSION REST <<<"$RESPONSE" || true
+        IFS=" " read -r STATE HASH SESSION REST <<<"$RESPONSE" || true
 
         if [[ "$STATE" == "READY" \
               && "$HASH" == "$EXPECTED" \
