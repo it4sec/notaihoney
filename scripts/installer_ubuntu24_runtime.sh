@@ -23,7 +23,8 @@
 # It does not apply nftables automatically because host-management access
 # and recovery cannot be proven by an installer.
 #
-# Pass --apply-firewall to explicitly load the validated ruleset.
+# Pass --apply-firewall to persist the validated ruleset through Ubuntu's
+# nftables.service and load the resulting /etc/nftables.conf configuration.
 #
 
 set -Eeuo pipefail
@@ -169,8 +170,8 @@ Usage: installer_ubuntu24_runtime.sh [--prepare-only] [--apply-firewall]
       Install and validate runtime artifacts but do not start or enable services.
 
   --apply-firewall
-      Explicitly load /etc/notaihoney/base.nft after deterministic listener
-      generation and nftables syntax validation.
+      Persist /etc/notaihoney/base.nft through /etc/nftables.conf, validate
+      the complete persistent ruleset, enable nftables.service, and load it.
 
   -h, --help
       Show this help.
@@ -1296,18 +1297,156 @@ if (( APPLY_FIREWALL )); then
     (( FIREWALL_READY )) || \
         die "--apply-firewall requires a supplied listeners-to-nft helper and a validated ruleset."
 
-    NFT_BACKUP="/root/nftables-before-notaihoney-$(date -u +%Y%m%dT%H%M%SZ).nft"
+    NFT_TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+    NFT_BACKUP="/root/nftables-before-notaihoney-${NFT_TIMESTAMP}.nft"
+    NFT_PERSISTENT_CONF="/etc/nftables.conf"
+    NFT_PERSISTENT_INCLUDE='include "/etc/notaihoney/base.nft"'
+    NFT_CONFIG_BACKUP="/root/nftables.conf-before-notaihoney-${NFT_TIMESTAMP}"
+    NFT_CONFIG_EXISTED=0
+    NFT_SERVICE_WAS_ACTIVE=0
+    NFT_SERVICE_WAS_ENABLED=0
+
+    if systemctl is-active --quiet nftables.service; then
+        NFT_SERVICE_WAS_ACTIVE=1
+    fi
+
+    if systemctl is-enabled --quiet nftables.service; then
+        NFT_SERVICE_WAS_ENABLED=1
+    fi
+
+    restore_previous_firewall_state() {
+
+        set +e
+
+        if (( NFT_CONFIG_EXISTED )); then
+            cp -a -- \
+                "$NFT_CONFIG_BACKUP" \
+                "$NFT_PERSISTENT_CONF"
+        else
+            rm -f -- "$NFT_PERSISTENT_CONF"
+        fi
+
+        nft -f "$NFT_BACKUP" >/dev/null 2>&1 || true
+
+        if (( NFT_SERVICE_WAS_ACTIVE )); then
+            systemctl restart nftables.service >/dev/null 2>&1 || true
+        else
+            systemctl stop nftables.service >/dev/null 2>&1 || true
+        fi
+
+        if (( ! NFT_SERVICE_WAS_ENABLED )); then
+            systemctl disable nftables.service >/dev/null 2>&1 || true
+        fi
+
+        set -e
+    }
 
     log "Saving current nftables ruleset to $NFT_BACKUP"
 
     nft list ruleset >"$NFT_BACKUP"
 
-    warn \
-        "Applying the supplied notAIhoney nftables ruleset because --apply-firewall was explicitly requested."
+    if [[ -e "$NFT_PERSISTENT_CONF" ]]; then
 
-    nft \
+        [[ -f "$NFT_PERSISTENT_CONF" ]] || \
+            die "$NFT_PERSISTENT_CONF exists but is not a regular file."
+
+        NFT_CONFIG_EXISTED=1
+
+        log "Backing up persistent nftables configuration to $NFT_CONFIG_BACKUP"
+
+        cp -a -- \
+            "$NFT_PERSISTENT_CONF" \
+            "$NFT_CONFIG_BACKUP"
+
+    else
+
+        log "Creating $NFT_PERSISTENT_CONF for persistent nftables loading"
+
+        printf '%s\n\n' '#!/usr/sbin/nft -f' \
+            >"$NFT_PERSISTENT_CONF"
+
+        chown root:root "$NFT_PERSISTENT_CONF"
+        chmod 0644 "$NFT_PERSISTENT_CONF"
+
+    fi
+
+    if ! grep -Fqx \
+        "$NFT_PERSISTENT_INCLUDE" \
+        "$NFT_PERSISTENT_CONF"
+    then
+
+        log "Adding notAIhoney ruleset include to $NFT_PERSISTENT_CONF"
+
+        printf \
+            '\n# notAIhoney persistent firewall\n%s\n' \
+            "$NFT_PERSISTENT_INCLUDE" \
+            >>"$NFT_PERSISTENT_CONF"
+
+    fi
+
+    log "Validating complete persistent nftables configuration"
+
+    if ! nft \
+        -c \
         -I "$INSTALL_ROOT" \
-        -f "$BASE_NFT_DST"
+        -f "$NFT_PERSISTENT_CONF"
+    then
+
+        restore_previous_firewall_state
+
+        die "Persistent nftables configuration validation failed; previous configuration restored."
+
+    fi
+
+    warn \
+        "Applying and enabling the validated notAIhoney nftables ruleset because --apply-firewall was explicitly requested."
+
+    if ! systemctl enable nftables.service; then
+
+        restore_previous_firewall_state
+
+        die "Failed to enable nftables.service for boot persistence."
+
+    fi
+
+    if ! systemctl restart nftables.service; then
+
+        warn "nftables.service failed to load; restoring previous firewall configuration."
+
+        restore_previous_firewall_state
+
+        die "Failed to activate persistent nftables configuration."
+
+    fi
+
+    if ! systemctl is-active --quiet nftables.service; then
+
+        restore_previous_firewall_state
+
+        die "nftables.service is not active after firewall activation."
+
+    fi
+
+    if ! systemctl is-enabled --quiet nftables.service; then
+
+        restore_previous_firewall_state
+
+        die "nftables.service is not enabled for boot persistence."
+
+    fi
+
+    if ! grep -Fqx \
+        "$NFT_PERSISTENT_INCLUDE" \
+        "$NFT_PERSISTENT_CONF"
+    then
+
+        restore_previous_firewall_state
+
+        die "$NFT_PERSISTENT_CONF does not contain the notAIhoney persistent include after activation."
+
+    fi
+
+    log "notAIhoney nftables rules are active and configured to persist across reboot"
 
 fi
 
