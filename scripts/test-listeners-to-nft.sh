@@ -7,18 +7,7 @@ SCRIPT=${SCRIPT:-"$PROJECT_ROOT/scripts/listeners-to-nft.sh"}
 TMP_ROOT=${TMPDIR:-/tmp}/listeners-to-nft-tests.$$
 mkdir -p "$TMP_ROOT"
 
-integration_restore_path=
-integration_backup_path=
-integration_had_original=0
-
 cleanup() {
-    if [[ -n $integration_restore_path ]]; then
-        if ((integration_had_original)); then
-            cp -- "$integration_backup_path" "$integration_restore_path" 2>/dev/null || :
-        else
-            rm -f -- "$integration_restore_path" 2>/dev/null || :
-        fi
-    fi
     rm -rf -- "$TMP_ROOT"
 }
 trap cleanup EXIT
@@ -91,39 +80,39 @@ run_success \
     'single valid TCP-backed listener' \
     "{\"config_sha256\":\"$valid_hash\",\"listeners\":[{\"service_id\":\"ollama\",\"address\":\"0.0.0.0\",\"port\":11434,\"protocol\":\"http\"}]}" \
     "# source configuration SHA-256: $valid_hash
-tcp dport { 11434 } accept
+elements = { 11434 }
 "
 
 run_success \
     'single valid HTTPS listener' \
     '{"listeners":[{"service_id":"secure-service","address":"0.0.0.0","port":443,"protocol":"https"}]}' \
-    $'tcp dport { 443 } accept\n'
+    $'elements = { 443 }\n'
 
 mixed_http_https='{"listeners":[
   {"service_id":"http-service","address":"0.0.0.0","port":8080,"protocol":"http"},
   {"service_id":"https-service","address":"0.0.0.0","port":8443,"protocol":"https"}
 ]}'
-run_success 'mixed HTTP + HTTPS listeners' "$mixed_http_https" $'tcp dport { 8080, 8443 } accept\n'
+run_success 'mixed HTTP + HTTPS listeners' "$mixed_http_https" $'elements = { 8080, 8443 }\n'
 
 duplicate_http_https='{"listeners":[
   {"service_id":"http-service","address":"0.0.0.0","port":8443,"protocol":"http"},
   {"service_id":"https-service","address":"0.0.0.0","port":8443,"protocol":"https"}
 ]}'
-run_success 'duplicate port across HTTP and HTTPS collapses' "$duplicate_http_https" $'tcp dport { 8443 } accept\n'
+run_success 'duplicate port across HTTP and HTTPS collapses' "$duplicate_http_https" $'elements = { 8443 }\n'
 
 multiple='{"listeners":[
   {"service_id":"svc-a","address":"0.0.0.0","port":8080,"protocol":"http"},
   {"service_id":"svc-b","address":"0.0.0.0","port":11434,"protocol":"http"},
   {"service_id":"svc-c","address":"0.0.0.0","port":12000,"protocol":"http"}
 ]}'
-run_success 'multiple valid listeners' "$multiple" $'tcp dport { 8080, 11434, 12000 } accept\n'
+run_success 'multiple valid listeners' "$multiple" $'elements = { 8080, 11434, 12000 }\n'
 
 unordered='{"listeners":[
   {"service_id":"svc-c","address":"0.0.0.0","port":12000,"protocol":"http"},
   {"service_id":"svc-a","address":"0.0.0.0","port":8080,"protocol":"http"},
   {"service_id":"svc-b","address":"0.0.0.0","port":11434,"protocol":"http"}
 ]}'
-run_success 'unordered listener input sorts numerically' "$unordered" $'tcp dport { 8080, 11434, 12000 } accept\n'
+run_success 'unordered listener input sorts numerically' "$unordered" $'elements = { 8080, 11434, 12000 }\n'
 
 duplicates='{"listeners":[
   {"service_id":"svc-c","address":"0.0.0.0","port":12000,"protocol":"http"},
@@ -131,7 +120,7 @@ duplicates='{"listeners":[
   {"service_id":"svc-b","address":"0.0.0.0","port":11434,"protocol":"http"},
   {"service_id":"svc-a","address":"0.0.0.0","port":8080,"protocol":"http"}
 ]}'
-run_success 'duplicate listener ports collapse' "$duplicates" $'tcp dport { 8080, 11434, 12000 } accept\n'
+run_success 'duplicate listener ports collapse' "$duplicates" $'elements = { 8080, 11434, 12000 }\n'
 
 run_failure 'invalid JSON' '{"listeners":['
 run_failure 'empty input' ''
@@ -158,59 +147,52 @@ else
     fail 'logically equivalent listener ordering is byte-for-byte identical'
 fi
 
-# Project integration check. Explicit BASE_NFT/GENERATED_NFT values take
-# precedence. Otherwise, automatically use the real project paths when
-# deploy/nftables/base.nft exists. The generated file is restored afterward so
-# this test does not leave the working tree modified.
+# Project integration check. This validates the generated fragment in the exact
+# syntactic context where the supplied base.nft includes generated-listeners.nft.
+#
+# The production base.nft uses an absolute /etc/notaihoney include path. To keep
+# this test non-destructive, make a temporary copy of base.nft and rewrite only
+# that include path to a temporary generated fragment. The surrounding nftables
+# table/set/chain structure remains unchanged.
 default_base_nft="$PROJECT_ROOT/deploy/nftables/base.nft"
-default_generated_nft="$PROJECT_ROOT/deploy/nftables/generated-listeners.nft"
-integration_requested=0
+BASE_NFT=${BASE_NFT:-$default_base_nft}
 
-if [[ -n ${BASE_NFT:-} || -n ${GENERATED_NFT:-} ]]; then
-    integration_requested=1
-    if [[ -z ${BASE_NFT:-} || -z ${GENERATED_NFT:-} ]]; then
-        fail 'nft integration check requires both BASE_NFT and GENERATED_NFT'
-        integration_requested=0
-    fi
-elif [[ -f $default_base_nft ]]; then
-    BASE_NFT=$default_base_nft
-    GENERATED_NFT=$default_generated_nft
-    integration_requested=1
-fi
-
-if ((integration_requested)); then
+if [[ -f $BASE_NFT ]]; then
     if ! command -v nft >/dev/null 2>&1; then
         fail 'nft integration check requested but nft is not installed'
-    elif [[ ! -f $BASE_NFT ]]; then
-        fail "nft integration check base file does not exist: $BASE_NFT"
-    elif [[ ! -d $(dirname -- "$GENERATED_NFT") ]]; then
-        fail "nft integration check generated-file directory does not exist: $(dirname -- "$GENERATED_NFT")"
     else
-        integration_restore_path=$GENERATED_NFT
-        integration_backup_path="$TMP_ROOT/generated-listeners.original"
-        integration_had_original=0
-        if [[ -e $GENERATED_NFT ]]; then
-            cp -- "$GENERATED_NFT" "$integration_backup_path"
-            integration_had_original=1
-        fi
+        integration_base="$TMP_ROOT/base.integration.nft"
+        integration_generated="$TMP_ROOT/generated-listeners.nft"
+        integration_error="$TMP_ROOT/integration-rewrite.error"
 
-        if ! printf '%s' "$multiple" | "$SCRIPT" >"$GENERATED_NFT"; then
+        if ! printf '%s' "$multiple" | "$SCRIPT" >"$integration_generated"; then
             fail 'failed to generate fragment for nft integration check'
-        elif nft -c -I "$(dirname -- "$BASE_NFT")" -f "$BASE_NFT"; then
-            pass 'generated fragment passes nft -c with supplied base.nft'
+        elif ! awk -v generated="$integration_generated" '
+            BEGIN { replacements = 0 }
+            /^[[:space:]]*include[[:space:]]+"\/etc\/notaihoney\/generated-listeners\.nft"[[:space:]]*$/ {
+                indent = $0
+                sub(/include.*/, "", indent)
+                print indent "include \"" generated "\""
+                replacements++
+                next
+            }
+            { print }
+            END {
+                if (replacements != 1) {
+                    print "expected exactly one /etc/notaihoney/generated-listeners.nft include, found " replacements > "/dev/stderr"
+                    exit 42
+                }
+            }
+        ' "$BASE_NFT" >"$integration_base" 2>"$integration_error"; then
+            fail "could not prepare base.nft integration copy: $(<"$integration_error")"
+        elif nft -c -f "$integration_base"; then
+            pass 'generated set fragment passes nft -c in supplied base.nft include context'
         else
-            fail 'generated fragment failed nft -c with supplied base.nft'
+            fail 'generated set fragment failed nft -c in supplied base.nft include context'
         fi
-
-        if ((integration_had_original)); then
-            cp -- "$integration_backup_path" "$GENERATED_NFT"
-        else
-            rm -f -- "$GENERATED_NFT"
-        fi
-        integration_restore_path=
     fi
 else
-    printf '%s\n' '# SKIP nft -c integration: deploy/nftables/base.nft is absent; or set BASE_NFT and GENERATED_NFT explicitly.'
+    printf '%s\n' '# SKIP nft -c integration: deploy/nftables/base.nft is absent; or set BASE_NFT explicitly.'
 fi
 
 printf '%s\n' "# passed: $pass_count; failed: $fail_count"

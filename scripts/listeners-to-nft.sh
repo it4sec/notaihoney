@@ -105,7 +105,7 @@ for ((i = 0; i < listener_count; i++)); do
         http|https)
             # The upstream schema uses application-level protocol labels. Both
             # supported values are TCP-backed and therefore contribute only
-            # their validated port number to the nftables TCP rule.
+            # their validated port number to the nftables listener_ports set.
             ;;
         *)
             error "Listener $display_index contains unsupported protocol; supported TCP-backed protocols are 'http' and 'https'."
@@ -127,7 +127,7 @@ if ! fragment=$(jq -r '
        else
            ""
        end)
-      + "tcp dport { " + ($ports | map(tostring) | join(", ")) + " } accept"
+      + "elements = { " + ($ports | map(tostring) | join(", ")) + " }"
 ' <<< "$json"); then
     error 'Failed to generate nftables fragment.'
 fi
