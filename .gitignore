@@ -13,7 +13,7 @@ logs/
 *.log
 
 # Tests & Packages
-tests/
+_research/
 package/
 
 # Architecture
