@@ -14,11 +14,9 @@
 # Run as root:
 #   sudo ./configure-notaihoney-dumpcap.sh
 #
-# Optional:
-#   sudo ./configure-notaihoney-dumpcap.sh --start-service
-#
-# The optional flag starts/restarts notaihoney-capture.service after the
-# configuration and verifies that dumpcap is running as notaihoney-capture.
+# A single run configures permissions, validates the effective systemd
+# security properties, performs an isolated dumpcap smoke test, restarts the
+# capture service, and verifies the live dumpcap runtime identity/capabilities.
 #
 
 set -Eeuo pipefail
@@ -37,7 +35,6 @@ PCAP_DIR="/var/lib/notaihoney/pcap"
 DROPIN_DIR="/etc/systemd/system/${SERVICE}.d"
 DROPIN_FILE="${DROPIN_DIR}/20-dumpcap-capabilities.conf"
 
-START_SERVICE=0
 
 log() {
     printf '[+] %s\n' "$*"
@@ -52,37 +49,9 @@ die() {
     exit 1
 }
 
-usage() {
-    cat <<EOF
-Usage: $0 [--start-service]
-
-Options:
-  --start-service   Start/restart ${SERVICE} after configuration and perform
-                    runtime process checks.
-  -h, --help        Show this help.
-
-Without --start-service, the script configures and validates the permissions,
-runs a short isolated dumpcap capture smoke test, and leaves the service's
-running/stopped state unchanged.
-EOF
-}
-
-while (($#)); do
-    case "$1" in
-        --start-service)
-            START_SERVICE=1
-            ;;
-        -h|--help)
-            usage
-            exit 0
-            ;;
-        *)
-            usage >&2
-            die "Unknown argument: $1"
-            ;;
-    esac
-    shift
-done
+if (($#)); then
+    die "This script does not accept arguments. Run it directly as root."
+fi
 
 [[ ${EUID} -eq 0 ]] || die "Run this script as root."
 
@@ -375,49 +344,60 @@ if systemctl cat "$MAIN_SERVICE" >/dev/null 2>&1; then
 fi
 
 # ---------------------------------------------------------------------------
-# Optional actual service start/restart and runtime identity verification
+# Restart capture service and verify live runtime identity/capabilities
 # ---------------------------------------------------------------------------
 
-if [[ "$START_SERVICE" -eq 0 ]] && systemctl is-active --quiet "$SERVICE"; then
-    warn "$SERVICE is currently active. Its running process still has the old credential/capability state."
-    warn "Restart it after review, or rerun this script with --start-service."
+log "Starting/restarting $SERVICE"
+if ! systemctl restart "$SERVICE"; then
+    systemctl --no-pager --full status "$SERVICE" || true
+    journalctl -u "$SERVICE" -b --no-pager -n 100 || true
+    die "Failed to start/restart $SERVICE."
 fi
 
-if [[ "$START_SERVICE" -eq 1 ]]; then
-    log "Starting/restarting $SERVICE"
-    systemctl restart "$SERVICE"
-
-    if ! systemctl is-active --quiet "$SERVICE"; then
-        systemctl --no-pager --full status "$SERVICE" || true
-        journalctl -u "$SERVICE" -b --no-pager -n 100 || true
-        die "$SERVICE did not become active."
-    fi
-
-    sleep 1
-
-    mapfile -t DUMPCAP_PIDS < <(pgrep -u "$CAPTURE_USER" -x dumpcap || true)
-
-    if ((${#DUMPCAP_PIDS[@]} == 0)); then
-        warn "$SERVICE is active, but no running dumpcap process owned by $CAPTURE_USER was found."
-        warn "This can be normal only if the service starts dumpcap on demand or dumpcap exits after short capture jobs."
-    else
-        log "Running dumpcap process(es):"
-        ps -o pid,user,group,cmd -p "$(IFS=,; echo "${DUMPCAP_PIDS[*]}")"
-
-        for pid in "${DUMPCAP_PIDS[@]}"; do
-            if [[ -r "/proc/$pid/status" ]]; then
-                CAP_EFF="$(awk '/^CapEff:/ {print $2}' "/proc/$pid/status")"
-                CAP_AMB="$(awk '/^CapAmb:/ {print $2}' "/proc/$pid/status")"
-
-                printf '    PID %s CapEff: %s\n' "$pid" "$CAP_EFF"
-                capsh --decode="$CAP_EFF" || true
-
-                printf '    PID %s CapAmb: %s\n' "$pid" "$CAP_AMB"
-                capsh --decode="$CAP_AMB" || true
-            fi
-        done
-    fi
+if ! systemctl is-active --quiet "$SERVICE"; then
+    systemctl --no-pager --full status "$SERVICE" || true
+    journalctl -u "$SERVICE" -b --no-pager -n 100 || true
+    die "$SERVICE did not become active."
 fi
+
+sleep 1
+
+mapfile -t DUMPCAP_PIDS < <(pgrep -u "$CAPTURE_USER" -x dumpcap || true)
+
+((${#DUMPCAP_PIDS[@]} > 0)) || {
+    systemctl --no-pager --full status "$SERVICE" || true
+    journalctl -u "$SERVICE" -b --no-pager -n 100 || true
+    die "$SERVICE is active, but no running dumpcap process owned by $CAPTURE_USER was found."
+}
+
+log "Running dumpcap process(es):"
+ps -o pid,user,group,cmd -p "$(IFS=,; echo "${DUMPCAP_PIDS[*]}")"
+
+for pid in "${DUMPCAP_PIDS[@]}"; do
+    PROCESS_USER="$(ps -o user= -p "$pid" | awk '{print $1}')"
+    PROCESS_GROUP="$(ps -o group= -p "$pid" | awk '{print $1}')"
+
+    [[ "$PROCESS_USER" == "$CAPTURE_USER" ]] || die \
+        "dumpcap PID $pid runs as user '$PROCESS_USER', expected '$CAPTURE_USER'."
+
+    [[ "$PROCESS_GROUP" == "$CAPTURE_RUNTIME_GROUP" ]] || die \
+        "dumpcap PID $pid runs with group '$PROCESS_GROUP', expected '$CAPTURE_RUNTIME_GROUP'."
+
+    [[ -r "/proc/$pid/status" ]] || die \
+        "Cannot read runtime capability state for dumpcap PID $pid."
+
+    CAP_EFF="$(awk '/^CapEff:/ {print $2}' "/proc/$pid/status")"
+    CAP_AMB="$(awk '/^CapAmb:/ {print $2}' "/proc/$pid/status")"
+
+    [[ -n "$CAP_EFF" && -n "$CAP_AMB" ]] || die \
+        "Could not read capability state for dumpcap PID $pid."
+
+    printf '    PID %s CapEff: %s\n' "$pid" "$CAP_EFF"
+    capsh --decode="$CAP_EFF" || true
+
+    printf '    PID %s CapAmb: %s\n' "$pid" "$CAP_AMB"
+    capsh --decode="$CAP_AMB" || true
+done
 
 # ---------------------------------------------------------------------------
 # Final report
@@ -438,10 +418,6 @@ printf 'AmbientCapabilities:          %s\n' "$SERVICE_AMBIENT"
 printf 'capture directory:            %s\n' "$PCAP_DIR"
 printf 'capture directory ownership:  %s\n' "$(stat -c '%A %U:%G' "$PCAP_DIR")"
 printf 'systemd drop-in:              %s\n' "$DROPIN_FILE"
+printf 'capture service state:        active\n'
 printf '\n'
 
-if [[ "$START_SERVICE" -eq 0 ]]; then
-    printf 'The service was not started by this script.\n'
-    printf 'To start it and run the runtime checks:\n'
-    printf '  sudo %s --start-service\n' "$0"
-fi
