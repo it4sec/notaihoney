@@ -10,21 +10,18 @@
 #   config/honeypot.yaml
 #   deploy/systemd/notaihoney.service
 #   deploy/systemd/notaihoney-capture.service
-#   deploy/nftables/base.nft
 #
 # Optional release-bundle files:
 #   notaihoney.sha256
 #   server.crt
 #   server.key
-#   scripts/listeners-to-nft.sh
-#   scripts/test-listeners-to-nft.sh   # development/test helper; not installed
 #
-# By default the installer validates, starts, and enables both services.
-# It does not apply nftables automatically because host-management access
-# and recovery cannot be proven by an installer.
+# By default the installer validates, starts, and enables both services without
+# modifying the host firewall.
 #
-# Pass --apply-firewall to persist the validated ruleset through Ubuntu's
-# nftables.service and load the resulting /etc/nftables.conf configuration.
+# Pass --apply-firewall to integrate validated listener ports into an existing,
+# administrator-managed active UFW firewall. The installer never enables UFW
+# and never manages native nftables persistence or service state.
 #
 
 set -Eeuo pipefail
@@ -51,9 +48,12 @@ INDEX_DIR="${DATA_ROOT}/index"
 BINARY_DST="/usr/local/bin/notaihoney"
 CONFIG_DST="${INSTALL_ROOT}/honeypot.yaml"
 
-BASE_NFT_DST="${INSTALL_ROOT}/base.nft"
 LISTENERS_JSON_DST="${INSTALL_ROOT}/listeners.json"
-GENERATED_NFT_DST="${INSTALL_ROOT}/generated-listeners.nft"
+
+UFW_PROFILE_DIR="/etc/ufw/applications.d"
+UFW_PROFILE_DST="${UFW_PROFILE_DIR}/notaihoney"
+UFW_PROFILE_NAME="notAIhoney"
+UFW_MANAGED_MARKER="# Managed by notAIhoney installer"
 
 TLS_CERT_DST="${TLS_DIR}/server.crt"
 TLS_KEY_DST="${TLS_DIR}/server.key"
@@ -73,7 +73,6 @@ CAPTURE_DROPIN="${CAPTURE_DROPIN_DIR}/20-notaihoney-capture-capabilities.conf"
 LIBEXEC_DIR="/usr/local/libexec"
 
 READY_HELPER="${LIBEXEC_DIR}/notaihoney-wait-capture-ready"
-NFT_GENERATOR_DST="${LIBEXEC_DIR}/notaihoney-listeners-to-nft"
 
 APPLY_FIREWALL=0
 PREPARE_ONLY=0
@@ -170,8 +169,9 @@ Usage: installer_ubuntu24_runtime.sh [--prepare-only] [--apply-firewall]
       Install and validate runtime artifacts but do not start or enable services.
 
   --apply-firewall
-      Persist /etc/notaihoney/base.nft through /etc/nftables.conf, validate
-      the complete persistent ruleset, enable nftables.service, and load it.
+      Add/update only the notAIhoney UFW application profile and allow rule.
+      Requires UFW to already be installed and active. Refuses operation when
+      native nftables.service is active or enabled.
 
   -h, --help
       Show this help.
@@ -225,11 +225,7 @@ done
 # ├── dist/notaihoney
 # ├── config/honeypot.yaml
 # ├── deploy/systemd/notaihoney.service
-# ├── deploy/systemd/notaihoney-capture.service
-# ├── deploy/nftables/base.nft
-# └── scripts/
-#     ├── listeners-to-nft.sh
-#     └── test-listeners-to-nft.sh
+# └── deploy/systemd/notaihoney-capture.service
 # ---------------------------------------------------------------------------
 
 BUNDLE_DIR="$PWD"
@@ -242,15 +238,11 @@ SERVE_UNIT_BUNDLE="${BUNDLE_DIR}/deploy/systemd/notaihoney.service"
 
 CAPTURE_UNIT_BUNDLE="${BUNDLE_DIR}/deploy/systemd/notaihoney-capture.service"
 
-BASE_NFT_BUNDLE="${BUNDLE_DIR}/deploy/nftables/base.nft"
-
 # Optional files remain expected in the current bundle root.
 SHA256_BUNDLE="${BUNDLE_DIR}/notaihoney.sha256"
 
 TLS_CERT_BUNDLE="${BUNDLE_DIR}/server.crt"
 TLS_KEY_BUNDLE="${BUNDLE_DIR}/server.key"
-
-NFT_GENERATOR_BUNDLE="${BUNDLE_DIR}/scripts/listeners-to-nft.sh"
 
 # ---------------------------------------------------------------------------
 # 1. Validate platform and release bundle
@@ -282,8 +274,7 @@ for path in \
     "$BINARY_BUNDLE" \
     "$CONFIG_BUNDLE" \
     "$SERVE_UNIT_BUNDLE" \
-    "$CAPTURE_UNIT_BUNDLE" \
-    "$BASE_NFT_BUNDLE"
+    "$CAPTURE_UNIT_BUNDLE"
 do
 
     [[ -f "$path" ]] || \
@@ -301,11 +292,6 @@ if [[ -e "$TLS_CERT_BUNDLE" || -e "$TLS_KEY_BUNDLE" ]]; then
 
 fi
 
-if [[ -e "$NFT_GENERATOR_BUNDLE" && ! -f "$NFT_GENERATOR_BUNDLE" ]]; then
-
-    die "scripts/listeners-to-nft.sh exists but is not a regular file."
-
-fi
 
 # ---------------------------------------------------------------------------
 # 2. Install runtime packages only
@@ -332,7 +318,6 @@ apt-get install -y --no-install-recommends \
     iproute2 \
     jq \
     libcap2-bin \
-    nftables \
     python3-minimal \
     socat \
     sqlite3 \
@@ -351,7 +336,6 @@ for cmd in \
     runuser \
     socat \
     jq \
-    nft \
     python3 \
     sha256sum \
     file \
@@ -562,13 +546,6 @@ install \
     -o root \
     -g root \
     -m 0644 \
-    "$BASE_NFT_BUNDLE" \
-    "$BASE_NFT_DST"
-
-install \
-    -o root \
-    -g root \
-    -m 0644 \
     "$SERVE_UNIT_BUNDLE" \
     "$SERVE_UNIT_DST"
 
@@ -604,20 +581,6 @@ if [[ -f "$TLS_CERT_BUNDLE" && -f "$TLS_KEY_BUNDLE" ]]; then
 
 fi
 
-if [[ -f "$NFT_GENERATOR_BUNDLE" ]]; then
-
-    install \
-        -o root \
-        -g root \
-        -m 0755 \
-        "$NFT_GENERATOR_BUNDLE" \
-        "$NFT_GENERATOR_DST"
-
-else
-
-    rm -f -- "$NFT_GENERATOR_DST"
-
-fi
 
 # ---------------------------------------------------------------------------
 # 8. Select capture interface and update the installed YAML
@@ -1242,211 +1205,244 @@ install \
     "$LISTENERS_JSON_DST"
 
 # ---------------------------------------------------------------------------
-# 15. Deterministic listener firewall generation and validation when available
+# 15. Safe UFW integration when explicitly requested
 # ---------------------------------------------------------------------------
 
-FIREWALL_READY=0
+FIREWALL_MANAGER="none"
+FIREWALL_APPLIED=0
+FIREWALL_MODIFIED=0
+LISTENER_PORTS_CSV=""
 
-if [[ -x "$NFT_GENERATOR_DST" ]]; then
+ufw_notaihoney_rule_present() {
 
-    log "Generating nftables listener fragment from validated listener JSON"
+    LC_ALL=C ufw status 2>/dev/null \
+        | awk -v app="$UFW_PROFILE_NAME" '
+            $1 == app && $2 == "ALLOW" { found=1 }
+            END { exit(found ? 0 : 1) }
+        '
+}
 
-    GENERATED_TMP="$(mktemp)"
+validate_generated_ufw_profile() {
 
-    TMP_FILES+=("$GENERATED_TMP")
+    local profile="$1"
+    local expected_ports="$2"
+    local ports_line
 
-    "$NFT_GENERATOR_DST" \
-        <"$LISTENERS_JSON_DST" \
-        >"$GENERATED_TMP"
+    [[ -f "$profile" ]] || return 1
+    [[ "$(sed -n '1p' "$profile")" == "$UFW_MANAGED_MARKER" ]] || return 1
+    grep -Fqx "[$UFW_PROFILE_NAME]" "$profile" || return 1
+    grep -Fqx 'title=notAIhoney listeners' "$profile" || return 1
+    grep -Fqx 'description=Generated from validated notAIhoney listener configuration' "$profile" || return 1
 
-    [[ -s "$GENERATED_TMP" ]] || \
-        die "listeners-to-nft produced an empty nftables fragment."
-
-    install \
-        -o root \
-        -g root \
-        -m 0644 \
-        "$GENERATED_TMP" \
-        "$GENERATED_NFT_DST"
-
-    if ! grep -Fq \
-        'generated-listeners.nft' \
-        "$BASE_NFT_DST"
-    then
-
-        die "$BASE_NFT_DST does not reference generated-listeners.nft; refusing to treat the firewall as complete."
-
-    fi
-
-    nft \
-        -c \
-        -I "$INSTALL_ROOT" \
-        -f "$BASE_NFT_DST"
-
-    FIREWALL_READY=1
-
-else
-
-    warn \
-        "No listeners-to-nft helper was supplied. Firewall listener generation is skipped rather than guessing a JSON-to-nft mapping."
-
-fi
+    [[ "$(grep -c '^ports=' "$profile")" -eq 1 ]] || return 1
+    ports_line="$(sed -n 's/^ports=//p' "$profile")"
+    [[ "$ports_line" == "$expected_ports" ]] || return 1
+    [[ "$ports_line" =~ ^[1-9][0-9]{0,4}/tcp(\|[1-9][0-9]{0,4}/tcp)*$ ]] || return 1
+}
 
 if (( APPLY_FIREWALL )); then
 
-    (( FIREWALL_READY )) || \
-        die "--apply-firewall requires a supplied listeners-to-nft helper and a validated ruleset."
+    FIREWALL_MANAGER="UFW"
 
-    NFT_TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
-    NFT_BACKUP="/root/nftables-before-notaihoney-${NFT_TIMESTAMP}.nft"
-    NFT_PERSISTENT_CONF="/etc/nftables.conf"
-    NFT_PERSISTENT_INCLUDE='include "/etc/notaihoney/base.nft"'
-    NFT_CONFIG_BACKUP="/root/nftables.conf-before-notaihoney-${NFT_TIMESTAMP}"
-    NFT_CONFIG_EXISTED=0
-    NFT_SERVICE_WAS_ACTIVE=0
-    NFT_SERVICE_WAS_ENABLED=0
+    log "Running UFW firewall preflight"
 
-    if systemctl is-active --quiet nftables.service; then
-        NFT_SERVICE_WAS_ACTIVE=1
+    command -v ufw >/dev/null 2>&1 || \
+        die "--apply-firewall refused: UFW is not installed."
+
+    UFW_STATUS="$(LC_ALL=C ufw status 2>&1)" || \
+        die "--apply-firewall refused: unable to query UFW status."
+
+    grep -q '^Status: active$' <<<"$UFW_STATUS" || \
+        die "--apply-firewall refused: UFW is not active."
+
+    if systemctl is-active --quiet nftables.service 2>/dev/null \
+        || systemctl is-enabled --quiet nftables.service 2>/dev/null
+    then
+        die "--apply-firewall refused: native nftables management is active or enabled."
     fi
 
-    if systemctl is-enabled --quiet nftables.service; then
-        NFT_SERVICE_WAS_ENABLED=1
+    [[ -d "$UFW_PROFILE_DIR" ]] || \
+        die "--apply-firewall refused: UFW application-profile directory is missing: $UFW_PROFILE_DIR"
+
+    log "Validating listener export for port-only UFW integration"
+
+    jq -e '
+        type == "object"
+        and has("listeners")
+        and (.listeners | type == "array")
+        and (.listeners | length > 0)
+        and all(.listeners[];
+            type == "object"
+            and has("address")
+            and has("port")
+            and has("protocol")
+            and (.address | type == "string")
+            and (.port | type == "number")
+            and (.port == (.port | floor))
+            and (.port >= 1 and .port <= 65535)
+            and (.protocol | type == "string")
+            and (.protocol == "http" or .protocol == "https")
+        )
+    ' "$LISTENERS_JSON_DST" >/dev/null || \
+        die "--apply-firewall refused: listener export is malformed or contains unsupported listener data."
+
+    if ! jq -e 'all(.listeners[]; .address == "0.0.0.0")' \
+        "$LISTENERS_JSON_DST" >/dev/null
+    then
+        die "--apply-firewall refused: port-only UFW integration supports only listeners bound to 0.0.0.0; refusing to broaden address-scoped exposure."
     fi
 
-    restore_previous_firewall_state() {
+    mapfile -t LISTENER_PORTS < <(
+        jq -r '[.listeners[].port | floor] | sort | unique | .[]' \
+            "$LISTENERS_JSON_DST"
+    )
+
+    ((${#LISTENER_PORTS[@]} > 0)) || \
+        die "--apply-firewall refused: listener export contains no TCP ports."
+
+    LISTENER_PORTS_CSV="$(IFS=,; printf '%s' "${LISTENER_PORTS[*]}")"
+
+    UFW_PORTS_SPEC=""
+    for port in "${LISTENER_PORTS[@]}"; do
+        if [[ -n "$UFW_PORTS_SPEC" ]]; then
+            UFW_PORTS_SPEC+="|"
+        fi
+        UFW_PORTS_SPEC+="${port}/tcp"
+    done
+
+    PROFILE_TMP="$(mktemp)"
+    TMP_FILES+=("$PROFILE_TMP")
+
+    cat >"$PROFILE_TMP" <<EOF_UFW_PROFILE
+$UFW_MANAGED_MARKER
+[$UFW_PROFILE_NAME]
+title=notAIhoney listeners
+description=Generated from validated notAIhoney listener configuration
+ports=$UFW_PORTS_SPEC
+EOF_UFW_PROFILE
+
+    validate_generated_ufw_profile "$PROFILE_TMP" "$UFW_PORTS_SPEC" || \
+        die "Generated notAIhoney UFW application profile failed validation."
+
+    UFW_PROFILE_EXISTED=0
+    UFW_RULE_EXISTED=0
+    UFW_PROFILE_CHANGED=1
+    UFW_PROFILE_BACKUP=""
+
+    if [[ -e "$UFW_PROFILE_DST" ]]; then
+
+        [[ -f "$UFW_PROFILE_DST" ]] || \
+            die "Existing UFW profile '$UFW_PROFILE_DST' is not a regular file; refusing to overwrite it."
+
+        [[ "$(sed -n '1p' "$UFW_PROFILE_DST")" == "$UFW_MANAGED_MARKER" ]] || \
+            die "Existing UFW profile 'notaihoney' is not installer-managed. Refusing to overwrite it."
+
+        UFW_PROFILE_EXISTED=1
+        UFW_PROFILE_BACKUP="$(mktemp)"
+        TMP_FILES+=("$UFW_PROFILE_BACKUP")
+        cp -a -- "$UFW_PROFILE_DST" "$UFW_PROFILE_BACKUP"
+
+        if cmp -s "$PROFILE_TMP" "$UFW_PROFILE_DST"; then
+            UFW_PROFILE_CHANGED=0
+        fi
+
+    fi
+
+    if ufw_notaihoney_rule_present; then
+        UFW_RULE_EXISTED=1
+    elif (( ! UFW_PROFILE_EXISTED )); then
+        # A named rule without an installer-managed profile has ambiguous
+        # ownership. Refuse rather than guessing or reconstructing it.
+        if LC_ALL=C ufw status 2>/dev/null | grep -Eq '^notAIhoney([[:space:]]|$)'; then
+            die "Existing notAIhoney UFW rule is not backed by an installer-managed profile; refusing to modify it."
+        fi
+    fi
+
+    rollback_notaihoney_ufw() {
 
         set +e
 
-        if (( NFT_CONFIG_EXISTED )); then
-            cp -a -- \
-                "$NFT_CONFIG_BACKUP" \
-                "$NFT_PERSISTENT_CONF"
+        # Always attempt removal before restoring the previous profile. If the
+        # just-added rule exists but status parsing failed, this still removes
+        # only the notAIhoney application rule. Failure is harmless here when
+        # no such rule exists.
+        ufw delete allow "$UFW_PROFILE_NAME" >/dev/null 2>&1 || true
+
+        if (( UFW_PROFILE_EXISTED )); then
+            install -o root -g root -m 0644 \
+                "$UFW_PROFILE_BACKUP" "$UFW_PROFILE_DST" >/dev/null 2>&1 || true
         else
-            rm -f -- "$NFT_PERSISTENT_CONF"
+            rm -f -- "$UFW_PROFILE_DST"
         fi
 
-        nft -f "$NFT_BACKUP" >/dev/null 2>&1 || true
-
-        if (( NFT_SERVICE_WAS_ACTIVE )); then
-            systemctl restart nftables.service >/dev/null 2>&1 || true
-        else
-            systemctl stop nftables.service >/dev/null 2>&1 || true
-        fi
-
-        if (( ! NFT_SERVICE_WAS_ENABLED )); then
-            systemctl disable nftables.service >/dev/null 2>&1 || true
+        if (( UFW_RULE_EXISTED )); then
+            ufw allow "$UFW_PROFILE_NAME" >/dev/null 2>&1 || true
         fi
 
         set -e
     }
 
-    log "Saving current nftables ruleset to $NFT_BACKUP"
+    install_ufw_profile_atomically() {
 
-    nft list ruleset >"$NFT_BACKUP"
+        local stage
 
-    if [[ -e "$NFT_PERSISTENT_CONF" ]]; then
+        stage="$(mktemp "${UFW_PROFILE_DIR}/.notaihoney.XXXXXX")" || return 1
+        TMP_FILES+=("$stage")
 
-        [[ -f "$NFT_PERSISTENT_CONF" ]] || \
-            die "$NFT_PERSISTENT_CONF exists but is not a regular file."
+        install -o root -g root -m 0644 "$PROFILE_TMP" "$stage" || return 1
+        mv -fT -- "$stage" "$UFW_PROFILE_DST" || return 1
 
-        NFT_CONFIG_EXISTED=1
+        [[ "$(stat -c '%U:%G' "$UFW_PROFILE_DST")" == "root:root" ]] || return 1
+        [[ "$(stat -c '%a' "$UFW_PROFILE_DST")" == "644" ]] || return 1
+    }
 
-        log "Backing up persistent nftables configuration to $NFT_CONFIG_BACKUP"
+    if (( ! UFW_PROFILE_CHANGED && UFW_RULE_EXISTED )); then
 
-        cp -a -- \
-            "$NFT_PERSISTENT_CONF" \
-            "$NFT_CONFIG_BACKUP"
+        log "notAIhoney UFW rule already matches validated listeners"
+        FIREWALL_APPLIED=1
 
     else
 
-        log "Creating $NFT_PERSISTENT_CONF for persistent nftables loading"
+        log "Updating only the notAIhoney UFW application profile and allow rule"
 
-        printf '%s\n\n' '#!/usr/sbin/nft -f' \
-            >"$NFT_PERSISTENT_CONF"
+        if (( UFW_RULE_EXISTED )); then
+            if ! ufw delete allow "$UFW_PROFILE_NAME" >/dev/null; then
+                rollback_notaihoney_ufw
+                die "Failed to remove the existing notAIhoney UFW allow rule."
+            fi
+        fi
 
-        chown root:root "$NFT_PERSISTENT_CONF"
-        chmod 0644 "$NFT_PERSISTENT_CONF"
+        if (( UFW_PROFILE_CHANGED )); then
+            if ! install_ufw_profile_atomically; then
+                rollback_notaihoney_ufw
+                die "Failed to atomically install the notAIhoney UFW application profile."
+            fi
 
-    fi
+            if ! validate_generated_ufw_profile "$UFW_PROFILE_DST" "$UFW_PORTS_SPEC"; then
+                rollback_notaihoney_ufw
+                die "Installed notAIhoney UFW profile failed validation."
+            fi
 
-    if ! grep -Fqx \
-        "$NFT_PERSISTENT_INCLUDE" \
-        "$NFT_PERSISTENT_CONF"
-    then
+            if ! LC_ALL=C ufw app info "$UFW_PROFILE_NAME" >/dev/null 2>&1; then
+                rollback_notaihoney_ufw
+                die "UFW did not accept the installed notAIhoney application profile."
+            fi
+        fi
 
-        log "Adding notAIhoney ruleset include to $NFT_PERSISTENT_CONF"
+        if ! ufw allow "$UFW_PROFILE_NAME" >/dev/null; then
+            rollback_notaihoney_ufw
+            die "Failed to add the notAIhoney UFW allow rule."
+        fi
 
-        printf \
-            '\n# notAIhoney persistent firewall\n%s\n' \
-            "$NFT_PERSISTENT_INCLUDE" \
-            >>"$NFT_PERSISTENT_CONF"
+        if ! ufw_notaihoney_rule_present; then
+            rollback_notaihoney_ufw
+            die "notAIhoney UFW allow rule was not present after application."
+        fi
 
-    fi
-
-    log "Validating complete persistent nftables configuration"
-
-    if ! nft \
-        -c \
-        -I "$INSTALL_ROOT" \
-        -f "$NFT_PERSISTENT_CONF"
-    then
-
-        restore_previous_firewall_state
-
-        die "Persistent nftables configuration validation failed; previous configuration restored."
-
-    fi
-
-    warn \
-        "Applying and enabling the validated notAIhoney nftables ruleset because --apply-firewall was explicitly requested."
-
-    if ! systemctl enable nftables.service; then
-
-        restore_previous_firewall_state
-
-        die "Failed to enable nftables.service for boot persistence."
+        FIREWALL_APPLIED=1
+        FIREWALL_MODIFIED=1
 
     fi
-
-    if ! systemctl restart nftables.service; then
-
-        warn "nftables.service failed to load; restoring previous firewall configuration."
-
-        restore_previous_firewall_state
-
-        die "Failed to activate persistent nftables configuration."
-
-    fi
-
-    if ! systemctl is-active --quiet nftables.service; then
-
-        restore_previous_firewall_state
-
-        die "nftables.service is not active after firewall activation."
-
-    fi
-
-    if ! systemctl is-enabled --quiet nftables.service; then
-
-        restore_previous_firewall_state
-
-        die "nftables.service is not enabled for boot persistence."
-
-    fi
-
-    if ! grep -Fqx \
-        "$NFT_PERSISTENT_INCLUDE" \
-        "$NFT_PERSISTENT_CONF"
-    then
-
-        restore_previous_firewall_state
-
-        die "$NFT_PERSISTENT_CONF does not contain the notAIhoney persistent include after activation."
-
-    fi
-
-    log "notAIhoney nftables rules are active and configured to persist across reboot"
 
 fi
 
@@ -1470,9 +1466,15 @@ if (( PREPARE_ONLY )); then
     printf '    config SHA-256:      %s\n' "$CONFIG_SHA256"
     printf '    listener export:     %s\n' "$LISTENERS_JSON_DST"
 
-    printf \
-        '    firewall ready:      %s\n' \
-        "$([[ $FIREWALL_READY -eq 1 ]] && echo yes || echo no)"
+    printf '    firewall requested:  %s\n' "$([[ $APPLY_FIREWALL -eq 1 ]] && echo yes || echo no)"
+    printf '    firewall modified:   %s\n' "$([[ $FIREWALL_MODIFIED -eq 1 ]] && echo yes || echo no)"
+
+    if (( APPLY_FIREWALL )); then
+        printf '    firewall manager:    %s\n' "$FIREWALL_MANAGER"
+        printf '    firewall profile:    %s\n' "$UFW_PROFILE_DST"
+        printf '    firewall applied:    %s\n' "$([[ $FIREWALL_APPLIED -eq 1 ]] && echo yes || echo no)"
+        printf '    listener ports:      %s\n' "$LISTENER_PORTS_CSV"
+    fi
 
     printf \
         'Services remain stopped and disabled because --prepare-only was requested.\n'
@@ -1565,26 +1567,23 @@ printf \
 printf '    capture service:     active + enabled\n'
 printf '    serving service:     active + enabled\n'
 
-printf \
-    '    firewall generated:  %s\n' \
-    "$([[ $FIREWALL_READY -eq 1 ]] && echo yes || echo no)"
+printf '    firewall requested:  %s\n' "$([[ $APPLY_FIREWALL -eq 1 ]] && echo yes || echo no)"
+printf '    firewall modified:   %s\n' "$([[ $FIREWALL_MODIFIED -eq 1 ]] && echo yes || echo no)"
 
-printf \
-    '    firewall applied:    %s\n' \
-    "$([[ $APPLY_FIREWALL -eq 1 ]] && echo yes || echo no)"
+if (( APPLY_FIREWALL )); then
+    printf '    firewall manager:    %s\n' "$FIREWALL_MANAGER"
+    printf '    firewall profile:    %s\n' "$UFW_PROFILE_DST"
+    printf '    firewall applied:    %s\n' "$([[ $FIREWALL_APPLIED -eq 1 ]] && echo yes || echo no)"
+    printf '    listener ports:      %s\n' "$LISTENER_PORTS_CSV"
+fi
 
 printf '\n'
 
 ss -ltnp || true
 
-if (( ! FIREWALL_READY )); then
+if (( ! APPLY_FIREWALL )); then
 
     warn \
-        "The server is running, but the guide's production firewall gate is not satisfied until an approved listeners-to-nft helper is supplied and the final ruleset passes nft -c."
-
-elif (( ! APPLY_FIREWALL )); then
-
-    warn \
-        "The server is running and the firewall ruleset validates, but it was not loaded. Use --apply-firewall only after confirming management access and recovery."
+        "The server is running and the installer did not modify the host firewall. Use --apply-firewall only when administrator-managed UFW is already installed and active."
 
 fi

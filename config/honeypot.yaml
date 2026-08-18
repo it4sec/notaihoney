@@ -91,6 +91,17 @@ services:
 
     routes:
       - method: "GET"
+        path: "/"
+        classification: "version_discovery"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            body: |
+              Ollama is running
+
+
+      - method: "GET"
         path: "/api/version"
         classification: "version_discovery"
         responses:
