@@ -28,6 +28,10 @@ SERVICE="notaihoney-capture.service"
 MAIN_SERVICE="notaihoney.service"
 CAPTURE_USER="notaihoney-capture"
 CAPTURE_GROUP="notaihoney-capture"
+# PCAP storage remains owned by the dedicated capture group, while the
+# running capture service uses the serving group so the serving service
+# can access /run/notaihoney/capture.sock.
+CAPTURE_RUNTIME_GROUP="notaihoney"
 PCAP_DIR="/var/lib/notaihoney/pcap"
 
 DROPIN_DIR="/etc/systemd/system/${SERVICE}.d"
@@ -154,6 +158,11 @@ if ! getent group "$CAPTURE_GROUP" >/dev/null; then
     groupadd --system "$CAPTURE_GROUP"
 fi
 
+if ! getent group "$CAPTURE_RUNTIME_GROUP" >/dev/null; then
+    log "Creating system runtime group: $CAPTURE_RUNTIME_GROUP"
+    groupadd --system "$CAPTURE_RUNTIME_GROUP"
+fi
+
 if ! id "$CAPTURE_USER" >/dev/null 2>&1; then
     log "Creating system user: $CAPTURE_USER"
     useradd \
@@ -225,7 +234,7 @@ fi
 cat >"$DROPIN_FILE" <<EOF
 [Service]
 User=${CAPTURE_USER}
-Group=${CAPTURE_GROUP}
+Group=${CAPTURE_RUNTIME_GROUP}
 
 # The process and its children may not acquire additional privilege through
 # execve(), setuid/setgid binaries, or filesystem capabilities.
@@ -272,8 +281,8 @@ RESTRICT_AF="$(systemctl show "$SERVICE" -p RestrictAddressFamilies --value 2>/d
 [[ "$SERVICE_USER" == "$CAPTURE_USER" ]] || die \
     "Effective service User= is '$SERVICE_USER', expected '$CAPTURE_USER'."
 
-[[ "$SERVICE_GROUP" == "$CAPTURE_GROUP" ]] || die \
-    "Effective service Group= is '$SERVICE_GROUP', expected '$CAPTURE_GROUP'."
+[[ "$SERVICE_GROUP" == "$CAPTURE_RUNTIME_GROUP" ]] || die \
+    "Effective service Group= is '$SERVICE_GROUP', expected '$CAPTURE_RUNTIME_GROUP'."
 
 [[ "$SERVICE_NNP" == "yes" ]] || die \
     "Effective NoNewPrivileges= is '$SERVICE_NNP', expected 'yes'."
@@ -421,7 +430,8 @@ printf 'dumpcap path:                 %s\n' "$DUMPCAP"
 printf 'dumpcap file capabilities:    %s\n' "$(getcap "$DUMPCAP" 2>/dev/null || true)"
 printf 'dumpcap mode/owner:           %s\n' "$(stat -c '%A %U:%G' "$DUMPCAP")"
 printf 'capture service user:         %s\n' "$SERVICE_USER"
-printf 'capture service group:        %s\n' "$SERVICE_GROUP"
+printf 'capture runtime group:        %s\n' "$SERVICE_GROUP"
+printf 'PCAP storage group:           %s\n' "$CAPTURE_GROUP"
 printf 'NoNewPrivileges:              %s\n' "$SERVICE_NNP"
 printf 'CapabilityBoundingSet:        %s\n' "$SERVICE_BOUNDING"
 printf 'AmbientCapabilities:          %s\n' "$SERVICE_AMBIENT"
