@@ -6,7 +6,7 @@ It presents believable AI-service endpoints, records network and application act
 
 **Owner:** Denis Laskov  
 **Year:** 2026  
-**Current services:** Ollama and vLLM  
+**Current services:** Ollama, vLLM, and Hugging Face TGI  
 **Platform:** Ubuntu 24.04 LTS  
 **License:** Free for personal use
 
@@ -17,8 +17,9 @@ It presents believable AI-service endpoints, records network and application act
 The current version includes enabled and tested simulations for:
 
 ```text
-Ollama  -> TCP/11434
-vLLM    -> TCP/8000
+Ollama            -> TCP/11434
+vLLM              -> TCP/8000
+Hugging Face TGI  -> TCP/3000
 ```
 
 ### Ollama
@@ -39,6 +40,12 @@ POST /api/chat
 vLLM simulation is also enabled and tested on TCP/8000 using YAML-defined static responses.
 
 As with Ollama, vLLM behavior is defined in `honeypot.yaml` and does not require product-specific Go logic.
+
+### Hugging Face TGI
+
+Hugging Face Text Generation Inference (TGI) simulation is enabled and tested on TCP/3000 using YAML-defined static responses.
+
+TGI behavior is also defined in `honeypot.yaml` and does not require product-specific Go logic.
 
 notAIhoney records activity at several levels:
 
@@ -145,8 +152,9 @@ The installer deploys the notAIhoney runtime, configuration, evidence directorie
 When deploying notAIhoney in a cloud environment, update the instance or network **security group / firewall rules** to allow inbound access to the honeypot service ports you intend to expose:
 
 ```text
-Ollama  -> TCP/11434
-vLLM    -> TCP/8000
+Ollama            -> TCP/11434
+vLLM              -> TCP/8000
+Hugging Face TGI  -> TCP/3000
 ```
 
 These cloud security-group rules are separate from the host firewall configuration on the Ubuntu machine.
@@ -232,7 +240,7 @@ Collected archives should be stored outside `/var/lib/notaihoney`, under the inv
 
 ## 5. Next steps
 
-The current release includes enabled and tested Ollama and vLLM simulations.
+The current release includes enabled and tested Ollama, vLLM, and Hugging Face TGI simulations.
 
 Planned work includes:
 
@@ -245,7 +253,6 @@ Planned work includes:
 Planned future service targets include:
 
 - NVIDIA NIM
-- Hugging Face TGI
 - llama.cpp server
 - NVIDIA Triton
 - TensorFlow Serving
