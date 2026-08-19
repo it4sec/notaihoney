@@ -65,56 +65,73 @@ A Go compiler is **not required** when installing from a prebuilt release bundle
 
 ## 3. How to install
 
-Extract the notAIhoney release archive and enter the extracted directory.
+Install the current Ubuntu 24.04 release in the following order.
 
-The release bundle contains the prebuilt binary, configuration, systemd services, and installer.
+### 1. Download the release archive
 
-Run:
+Download the release archive from:
+
+```text
+package/
+```
+
+### 2. Unpack the archive
+
+Create or choose a directory for the release and extract the package:
+
+```bash
+tar -zxvf package.tar.gz
+```
+
+Then enter the extracted project directory.
+
+### 3. Update the operating system
+
+Before installing notAIhoney, update the package index and installed packages:
+
+```bash
+sudo apt update
+sudo apt upgrade
+```
+
+### 4. Install Wireshark
+
+Install Wireshark, which provides `dumpcap` for packet capture:
+
+```bash
+sudo apt install wireshark
+```
+
+### 5. Enter the scripts directory
+
+```bash
+cd scripts/
+```
+
+### 6. Prepare the system and configure dumpcap
+
+Run both preparation scripts as superuser:
+
+```bash
+sudo ./prep_system.sh
+sudo ./dumpcap_permissions.sh
+```
+
+`prep_system.sh` prepares the host prerequisites required by notAIhoney.
+
+`dumpcap_permissions.sh` configures the packet-capture permissions required by the dedicated capture service.
+
+### 7. Run the runtime installer
+
+From the same `scripts/` directory, run:
 
 ```bash
 sudo ./installer_ubuntu24_runtime.sh
 ```
 
-The installer performs the required runtime setup, including:
+The installer deploys the notAIhoney runtime, configuration, evidence directories, systemd services, capture configuration, listener validation, and firewall integration required by the current release.
 
-- dependency and host validation
-- creation of the `notaihoney` runtime identities
-- installation of the binary and YAML configuration
-- evidence-directory preparation
-- capture-interface selection
-- `dumpcap` permission validation
-- installation of the capture and serving systemd services
-- capture readiness validation
-- configuration and operational checks
-- validated listener export
-
-### Firewall application
-
-Public listener exposure is an explicit installation step.
-
-When firewall application is requested, the installer derives the required TCP ports from:
-
-```text
-honeypot.yaml
-    ↓
-notaihoney validation
-    ↓
-validated listener JSON
-    ↓
-generated UFW application profile
-```
-
-The generated profile is stored under:
-
-```text
-/etc/ufw/applications.d/notaihoney
-```
-
-Only the notAIhoney UFW application rule is managed by the installer.
-
-The installer must not modify global UFW policy or native nftables configuration.
-
-After installation, verify:
+After installation, verify the services:
 
 ```bash
 sudo systemctl status notaihoney-capture.service
