@@ -408,6 +408,161 @@ services:
       status: 404
       body: ""
 
+
+
+  llamacpp:
+    enabled: true
+
+    listener:
+      address: "0.0.0.0"
+      port: 8080
+      protocol: "http"
+
+    identity:
+      product: "llamacpp"
+      variant: "default"
+
+    # LLAMA.CPP SERVER STATIC FIXTURE POLICY
+    # Every llama.cpp response below is complete literal fixture data. No
+    # response is generated, templated, interpolated or derived from request
+    # content at runtime. Incoming request bodies are evidence only.
+    #
+    # Only generic HTTP engine capabilities already used by the other simulated
+    # services are required: method/path routing, immediate static responses,
+    # per-response headers and one service-level static fallback.
+    default_headers:
+      Server: "llama.cpp"
+
+    routes:
+      - method: "GET"
+        path: "/health"
+        classification: "health_check"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json; charset=utf-8"
+            body: |
+              {"status":"ok"}
+
+      - method: "GET"
+        path: "/v1/health"
+        classification: "health_check"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json; charset=utf-8"
+            body: |
+              {"status":"ok"}
+
+      - method: "GET"
+        path: "/props"
+        classification: "metadata_discovery"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json; charset=utf-8"
+            body: >-
+              {"default_generation_settings":{"n_predict":-1,"seed":4294967295,"temperature":0.8,"top_k":40,"top_p":0.95,"min_p":0.05},"total_slots":1,"model_path":"/models/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf","chat_template":"{% for message in messages %}{{ '<|im_start|>' + message['role'] + '\n' + message['content'] + '<|im_end|>\n' }}{% endfor %}{% if add_generation_prompt %}{{ '<|im_start|>assistant\n' }}{% endif %}","chat_template_caps":{},"modalities":{"vision":false},"build_info":"b6100-notaihoney","is_sleeping":false}
+
+      - method: "GET"
+        path: "/slots"
+        classification: "metadata_discovery"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json; charset=utf-8"
+            body: >-
+              [{"id":0,"id_task":-1,"n_ctx":32768,"speculative":false,"is_processing":false,"params":{"n_predict":-1,"seed":4294967295,"temperature":0.8,"top_k":40,"top_p":0.95,"min_p":0.05},"next_token":{"has_next_token":true,"has_new_line":false,"n_remain":-1,"n_decoded":0}}]
+
+      - method: "GET"
+        path: "/v1/models"
+        classification: "model_discovery"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json; charset=utf-8"
+            body: >-
+              {"object":"list","data":[{"id":"/models/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf","object":"model","created":1787126400,"owned_by":"llamacpp","meta":{"vocab_type":2,"n_vocab":151936,"n_ctx_train":32768,"n_embd":1536,"n_params":1543714304,"size":986243072}}]}
+
+      - method: "POST"
+        path: "/completion"
+        classification: "inference_attempt"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json; charset=utf-8"
+            body: >-
+              {"content":"Hello! How can I help you today?","tokens":[],"id_slot":0,"stop":true,"model":"Qwen2.5-1.5B-Instruct-Q4_K_M.gguf","tokens_predicted":9,"tokens_evaluated":2,"generation_settings":{"n_predict":-1,"seed":4294967295,"temperature":0.8,"top_k":40,"top_p":0.95,"min_p":0.05},"prompt":"Hello","has_new_line":false,"truncated":false,"stop_type":"eos","stopping_word":"","tokens_cached":0,"timings":{"prompt_n":2,"prompt_ms":23.41,"prompt_per_token_ms":11.705,"prompt_per_second":85.43,"predicted_n":9,"predicted_ms":176.58,"predicted_per_token_ms":19.62,"predicted_per_second":50.97}}
+
+      - method: "POST"
+        path: "/v1/completions"
+        classification: "inference_attempt"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json; charset=utf-8"
+            body: >-
+              {"choices":[{"finish_reason":"stop","index":0,"text":"Hello! How can I help you today?"}],"created":1787126400,"model":"Qwen2.5-1.5B-Instruct-Q4_K_M.gguf","system_fingerprint":"b6100-notaihoney","object":"text_completion","usage":{"completion_tokens":9,"prompt_tokens":2,"total_tokens":11},"id":"cmpl-notaihoney-llamacpp-001","timings":{"prompt_n":2,"prompt_ms":23.41,"predicted_n":9,"predicted_ms":176.58}}
+
+      - method: "POST"
+        path: "/v1/chat/completions"
+        classification: "inference_attempt"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json; charset=utf-8"
+            body: >-
+              {"choices":[{"finish_reason":"stop","index":0,"message":{"role":"assistant","content":"Hello! How can I help you today?"}}],"created":1787126400,"model":"Qwen2.5-1.5B-Instruct-Q4_K_M.gguf","system_fingerprint":"b6100-notaihoney","object":"chat.completion","usage":{"completion_tokens":9,"prompt_tokens":7,"total_tokens":16},"id":"chatcmpl-notaihoney-llamacpp-001","timings":{"prompt_n":7,"prompt_ms":49.72,"predicted_n":9,"predicted_ms":176.58}}
+
+      - method: "POST"
+        path: "/tokenize"
+        classification: "metadata_discovery"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json; charset=utf-8"
+            body: |
+              {"tokens":[9707]}
+
+      - method: "POST"
+        path: "/detokenize"
+        classification: "metadata_discovery"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json; charset=utf-8"
+            body: |
+              {"content":"Hello"}
+
+    # Every method/path not explicitly defined above receives the same static
+    # llama.cpp-style fallback. No request-dependent error generation is used.
+    default_response:
+      status: 404
+      headers:
+        Content-Type: "application/json; charset=utf-8"
+      body: |
+        {"error":{"message":"File Not Found","type":"not_found_error","code":404}}
+
 # ---------------------------------------------------------------------------
 # OPTIONAL OFFLINE ANALYSIS
 # Used only by: notaihoney index
