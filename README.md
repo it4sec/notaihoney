@@ -6,7 +6,7 @@ It presents believable AI-service endpoints, records network and application act
 
 **Owner:** Denis Laskov  
 **Year:** 2026  
-**Current services:** Ollama, vLLM, Hugging Face TGI, llama.cpp server, and TensorFlow Serving  
+**Current services:** Ollama, vLLM, Hugging Face TGI, llama.cpp server, TensorFlow Serving, and NVIDIA NIM  
 **Platform:** Ubuntu 24.04 LTS  
 **License:** Free for personal use
 
@@ -19,10 +19,13 @@ The current version includes enabled and tested simulations for:
 ```text
 Ollama              -> TCP/11434
 vLLM                -> TCP/8000
+NVIDIA NIM          -> TCP/8000
 Hugging Face TGI    -> TCP/3000
 llama.cpp server    -> TCP/8080
 TensorFlow Serving  -> TCP/8501
 ```
+
+> **Port conflict:** vLLM and NVIDIA NIM both use TCP/8000 in the current configuration. On the same network interface, only one of these two services can be enabled at a time.
 
 ### Ollama
 
@@ -60,6 +63,14 @@ As with the other simulated services, llama.cpp server behavior is defined in `h
 TensorFlow Serving simulation is enabled and tested on TCP/8501 using YAML-defined static responses.
 
 TensorFlow Serving behavior is also defined in `honeypot.yaml` and does not require product-specific Go logic.
+
+### NVIDIA NIM
+
+NVIDIA NIM simulation is enabled and tested on TCP/8000 using YAML-defined static responses.
+
+NVIDIA NIM behavior is defined in `honeypot.yaml` and does not require product-specific Go logic.
+
+> **Important:** NVIDIA NIM and vLLM are both configured for TCP/8000. If they use the same network interface, only one of them can be enabled at a time. To run both simultaneously, configure different listener ports or different interfaces.
 
 notAIhoney records activity at several levels:
 
@@ -168,10 +179,13 @@ When deploying notAIhoney in a cloud environment, update the instance or network
 ```text
 Ollama              -> TCP/11434
 vLLM                -> TCP/8000
+NVIDIA NIM          -> TCP/8000
 Hugging Face TGI    -> TCP/3000
 llama.cpp server    -> TCP/8080
 TensorFlow Serving  -> TCP/8501
 ```
+
+Because vLLM and NVIDIA NIM use the same TCP/8000 listener in the current configuration, exposing TCP/8000 allows whichever of those two services is enabled. They cannot both listen on the same interface and port at the same time.
 
 These cloud security-group rules are separate from the host firewall configuration on the Ubuntu machine.
 
@@ -256,7 +270,7 @@ Collected archives should be stored outside `/var/lib/notaihoney`, under the inv
 
 ## 5. Next steps
 
-The current release includes enabled and tested Ollama, vLLM, Hugging Face TGI, llama.cpp server, and TensorFlow Serving simulations.
+The current release includes enabled and tested Ollama, vLLM, NVIDIA NIM, Hugging Face TGI, llama.cpp server, and TensorFlow Serving simulations.
 
 Planned work includes:
 
@@ -268,7 +282,6 @@ Planned work includes:
 
 Planned future service targets include:
 
-- NVIDIA NIM
 - NVIDIA Triton
 - KServe-compatible APIs
 

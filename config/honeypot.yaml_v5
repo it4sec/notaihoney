@@ -69,7 +69,7 @@ limits:
 
 # ===========================================================================
 # SIMULATED SERVICES
-# Personalities: Ollama + vLLM OpenAI-compatible API server + Hugging Face TGI + NVIDIA NIM + llama.cpp + TensorFlow Serving
+# Personalities: Ollama + vLLM OpenAI-compatible API server + Hugging Face TGI + llama.cpp + TensorFlow Serving
 #
 # STATIC FIXTURE CONTRACT
 # Product-specific behavior remains entirely YAML-defined. Every response body,
@@ -179,7 +179,7 @@ services:
 
 
   vllm:
-    enabled: false
+    enabled: true
 
     listener:
       address: "0.0.0.0"
@@ -407,143 +407,6 @@ services:
     default_response:
       status: 404
       body: ""
-
-
-
-  nvidia_nim:
-    enabled: true
-
-    listener:
-      address: "0.0.0.0"
-      port: 8000
-      protocol: "http"
-
-    identity:
-      product: "nvidia_nim"
-      variant: "llm"
-
-    # NVIDIA NIM STATIC FIXTURE POLICY
-    # Target personality: NVIDIA NIM for LLMs 3.0.0, exposed on TCP/9000.
-    # Port 9000 is intentionally configured here so NIM can coexist with the
-    # vLLM personality already bound to TCP/8000.
-    #
-    # Every response below is complete literal fixture data. No response is
-    # generated, templated, interpolated or selected from request-body content.
-    # Incoming request bodies are evidence only; they do not affect responses.
-    #
-    # The inference endpoints deliberately return one fixed non-streaming JSON
-    # response even when a client requests streaming. This keeps the personality
-    # fully YAML-defined and requires no NIM-specific logic in the Go engine.
-    default_headers:
-      Server: "nginx/1.18.0 (Ubuntu)"
-
-    routes:
-      - method: "GET"
-        path: "/v1/health/live"
-        classification: "health_check"
-        responses:
-          - sequence: default
-            status: 200
-            response_mode: "immediate"
-            headers:
-              Content-Type: "application/json"
-              Cache-Control: "no-store, no-cache, must-revalidate"
-            body: >-
-              {"object":"health.response","message":"live","status":"live"}
-
-      - method: "GET"
-        path: "/v1/health/ready"
-        classification: "health_check"
-        responses:
-          - sequence: default
-            status: 200
-            response_mode: "immediate"
-            headers:
-              Content-Type: "application/json"
-              Cache-Control: "no-store, no-cache, must-revalidate"
-            body: >-
-              {"object":"health.response","message":"ready","status":"ready"}
-
-      - method: "GET"
-        path: "/v1/models"
-        classification: "model_discovery"
-        responses:
-          - sequence: default
-            status: 200
-            response_mode: "immediate"
-            headers:
-              Content-Type: "application/json"
-            body: >-
-              {"object":"list","data":[{"id":"nvidia/nemotron-3-super-120b-a12b","object":"model","created":1787126400,"owned_by":"nvidia","root":"nvidia/nemotron-3-super-120b-a12b","parent":null,"max_model_len":131072}]}
-
-      - method: "GET"
-        path: "/v1/version"
-        classification: "version_discovery"
-        responses:
-          - sequence: default
-            status: 200
-            response_mode: "immediate"
-            headers:
-              Content-Type: "application/json"
-            body: >-
-              {"version":"3.0.0","openapi_version":"3.1.0"}
-
-      - method: "GET"
-        path: "/v1/metadata"
-        classification: "metadata_discovery"
-        responses:
-          - sequence: default
-            status: 200
-            response_mode: "immediate"
-            headers:
-              Content-Type: "application/json"
-            body: >-
-              {"model":"nvidia/nemotron-3-super-120b-a12b","model_profile":"notaihoney-nim-profile-001","model_profile_name":"NVIDIA Nemotron 3 Super 120B A12B","precision":"fp8","backend":"vllm","license":"NVIDIA AI Product Agreement"}
-
-      - method: "POST"
-        path: "/v1/chat/completions"
-        classification: "inference_attempt"
-        responses:
-          - sequence: default
-            status: 200
-            response_mode: "immediate"
-            headers:
-              Content-Type: "application/json"
-            body: >-
-              {"id":"chatcmpl-notaihoney-nim-001","object":"chat.completion","created":1787126400,"model":"nvidia/nemotron-3-super-120b-a12b","choices":[{"index":0,"message":{"role":"assistant","content":"Hello! How can I help you today?"},"logprobs":null,"finish_reason":"stop"}],"usage":{"prompt_tokens":7,"completion_tokens":9,"total_tokens":16}}
-
-      - method: "POST"
-        path: "/v1/completions"
-        classification: "inference_attempt"
-        responses:
-          - sequence: default
-            status: 200
-            response_mode: "immediate"
-            headers:
-              Content-Type: "application/json"
-            body: >-
-              {"id":"cmpl-notaihoney-nim-001","object":"text_completion","created":1787126400,"model":"nvidia/nemotron-3-super-120b-a12b","choices":[{"index":0,"text":"Hello! How can I help you today?","logprobs":null,"finish_reason":"stop"}],"usage":{"prompt_tokens":2,"completion_tokens":9,"total_tokens":11}}
-
-      - method: "POST"
-        path: "/v1/responses"
-        classification: "inference_attempt"
-        responses:
-          - sequence: default
-            status: 200
-            response_mode: "immediate"
-            headers:
-              Content-Type: "application/json"
-            body: >-
-              {"id":"resp-notaihoney-nim-001","object":"response","created_at":1787126400,"status":"completed","model":"nvidia/nemotron-3-super-120b-a12b","output":[{"id":"msg-notaihoney-nim-001","type":"message","status":"completed","role":"assistant","content":[{"type":"output_text","text":"Hello! How can I help you today?","annotations":[]}]}],"usage":{"input_tokens":6,"output_tokens":9,"total_tokens":15}}
-
-    # Every method/path not explicitly defined above receives one static JSON
-    # fallback. No request-dependent validation or error synthesis is performed.
-    default_response:
-      status: 404
-      headers:
-        Content-Type: "application/json"
-      body: |
-        {"detail":"Not Found"}
 
 
 
