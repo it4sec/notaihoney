@@ -69,8 +69,14 @@ limits:
 
 # ===========================================================================
 # SIMULATED SERVICES
-# Milestone 1 personality: Ollama
-# Product-specific behavior remains entirely YAML-defined.
+# Personalities: Ollama + vLLM OpenAI-compatible API server
+#
+# STATIC FIXTURE CONTRACT
+# Product-specific behavior remains entirely YAML-defined. Every response body,
+# status and response header used by a simulated service is literal fixture data
+# in this file. The Go engine only performs the existing generic listener, route,
+# response and evidence functions; it must not synthesize, interpolate, template
+# or otherwise generate product response content from request data at runtime.
 # ===========================================================================
 
 services:
@@ -170,6 +176,90 @@ services:
         Content-Type: "application/json"
       body: |
         {"error":"404 page not found"}
+
+
+  vllm:
+    enabled: true
+
+    listener:
+      address: "0.0.0.0"
+      port: 8000
+      protocol: "http"
+
+    identity:
+      product: "vllm"
+      variant: "default"
+
+    # vLLM STATIC FIXTURE POLICY
+    # Every vLLM response below is complete static fixture data. Nothing is
+    # generated from request content at runtime. Only capabilities already used
+    # by the existing generic HTTP engine are used here.
+    #
+    # Do not define service-wide Content-Type here because health responses have
+    # an empty body while discovery responses are JSON. Headers are therefore
+    # defined per response where required.
+    routes:
+      - method: "GET"
+        path: "/health"
+        classification: "health_check"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            body: ""
+
+      - method: "GET"
+        path: "/ping"
+        classification: "health_check"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            body: ""
+
+      - method: "POST"
+        path: "/ping"
+        classification: "health_check"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            body: ""
+
+      - method: "GET"
+        path: "/version"
+        classification: "version_discovery"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json"
+            body: |
+              {"version":"0.27.0"}
+
+      - method: "GET"
+        path: "/v1/models"
+        classification: "model_discovery"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json"
+            body: >-
+              {"object":"list","data":[{"id":"Qwen/Qwen2.5-1.5B-Instruct","object":"model","created":1787126400,"owned_by":"vllm","root":"Qwen/Qwen2.5-1.5B-Instruct","parent":null,"max_model_len":32768,"permission":[{"id":"modelperm-notaihoney-001","object":"model_permission","created":1787126400,"allow_create_engine":false,"allow_sampling":true,"allow_logprobs":true,"allow_search_indices":false,"allow_view":true,"allow_fine_tuning":false,"organization":"*","group":null,"is_blocking":false}]}]}
+
+    # Any request whose method/path is not explicitly defined above is handled
+    # by this single static fallback response. This includes GET /, inference
+    # endpoints such as /v1/completions and /v1/chat/completions, and all other
+    # undefined vLLM requests.
+    default_response:
+      status: 404
+      headers:
+        Content-Type: "application/json"
+      body: |
+        {"detail":"Not Found"}
 
 # ---------------------------------------------------------------------------
 # OPTIONAL OFFLINE ANALYSIS
