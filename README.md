@@ -6,7 +6,7 @@ It presents believable AI-service endpoints, records network and application act
 
 **Owner:** Denis Laskov  
 **Year:** 2026  
-**Current milestone:** Ollama emulation  
+**Current services:** Ollama and vLLM  
 **Platform:** Ubuntu 24.04 LTS  
 **License:** Free for personal use
 
@@ -14,13 +14,16 @@ It presents believable AI-service endpoints, records network and application act
 
 ## 1. What it does
 
-The current version simulates an **Ollama** service, normally exposed on:
+The current version includes enabled and tested simulations for:
 
 ```text
-TCP/11434
+Ollama  -> TCP/11434
+vLLM    -> TCP/8000
 ```
 
-Supported API routes include:
+### Ollama
+
+Supported Ollama API routes include:
 
 ```text
 GET  /api/version
@@ -30,6 +33,12 @@ POST /api/show
 POST /api/generate
 POST /api/chat
 ```
+
+### vLLM
+
+vLLM simulation is also enabled and tested on TCP/8000 using YAML-defined static responses.
+
+As with Ollama, vLLM behavior is defined in `honeypot.yaml` and does not require product-specific Go logic.
 
 notAIhoney records activity at several levels:
 
@@ -131,6 +140,17 @@ sudo ./installer_ubuntu24_runtime.sh
 
 The installer deploys the notAIhoney runtime, configuration, evidence directories, systemd services, capture configuration, listener validation, and firewall integration required by the current release.
 
+### Cloud installations
+
+When deploying notAIhoney in a cloud environment, update the instance or network **security group / firewall rules** to allow inbound access to the honeypot service ports you intend to expose:
+
+```text
+Ollama  -> TCP/11434
+vLLM    -> TCP/8000
+```
+
+These cloud security-group rules are separate from the host firewall configuration on the Ubuntu machine.
+
 After installation, verify the services:
 
 ```bash
@@ -212,7 +232,7 @@ Collected archives should be stored outside `/var/lib/notaihoney`, under the inv
 
 ## 5. Next steps
 
-The current milestone is focused on completing and validating the Ollama sensor.
+The current release includes enabled and tested Ollama and vLLM simulations.
 
 Planned work includes:
 
@@ -220,11 +240,10 @@ Planned work includes:
 - continue malformed, slow-client, load, and resource-limit testing
 - improve deployment and evidence-handling validation
 - expand forensic analysis and indexing workflows
-- add additional AI-service simulations through `honeypot.yaml`
+- continue expanding additional AI-service simulations through `honeypot.yaml`
 
 Planned future service targets include:
 
-- vLLM
 - NVIDIA NIM
 - Hugging Face TGI
 - llama.cpp server
