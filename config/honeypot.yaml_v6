@@ -1,0 +1,858 @@
+version: 1
+
+# ---------------------------------------------------------------------------
+# GLOBAL SETTINGS
+# ---------------------------------------------------------------------------
+
+global:
+  tls:
+    directory: "/etc/notaihoney/tls"
+
+sensor:
+  id: "sensor-01"
+
+# ---------------------------------------------------------------------------
+# EVIDENCE
+# PCAPNG, BWJ and JSONL are mandatory Milestone 1 evidence subsystems.
+# They intentionally have no enabled switches.
+# ---------------------------------------------------------------------------
+
+evidence:
+  min_free_bytes: 5368709120
+
+  pcap:
+    interface: "eth0"
+    directory: "/var/lib/notaihoney/pcap"
+    rotate_size_bytes: 268435456
+    rotate_seconds: 3600
+
+  wire_journal:
+    directory: "/var/lib/notaihoney/journal"
+    rotate_size_bytes: 268435456
+    rotate_seconds: 3600
+
+  jsonl:
+    directory: "/var/lib/notaihoney/events"
+    rotate_size_bytes: 67108864
+    rotate_seconds: 3600
+
+# ---------------------------------------------------------------------------
+# RESOURCE LIMITS
+# ---------------------------------------------------------------------------
+
+limits:
+  max_connections_total: 1024
+  max_connections_per_service: 256
+
+  max_requests_per_connection: 1000
+  max_connection_lifetime_seconds: 3600
+  max_connection_bytes: 67108864
+
+  max_header_bytes: 32768
+  max_body_bytes: 4194304
+  max_response_bytes: 4194304
+
+  max_structured_event_bytes: 262144
+  max_structured_headers: 128
+  max_query_fields: 128
+
+  tls_handshake_timeout_seconds: 5
+  header_timeout_seconds: 5
+  body_timeout_seconds: 15
+  write_timeout_seconds: 15
+  idle_timeout_seconds: 30
+
+  max_stream_seconds: 60
+
+  max_post_failure_capture_bytes: 4194304
+  post_failure_capture_timeout_seconds: 5
+
+# ===========================================================================
+# SIMULATED SERVICES
+# Personalities: Ollama + vLLM OpenAI-compatible API server + Hugging Face TGI + NVIDIA NIM + llama.cpp + TensorFlow Serving
+#
+# STATIC FIXTURE CONTRACT
+# Product-specific behavior remains entirely YAML-defined. Every response body,
+# status and response header used by a simulated service is literal fixture data
+# in this file. The Go engine only performs the existing generic listener, route,
+# response and evidence functions; it must not synthesize, interpolate, template
+# or otherwise generate product response content from request data at runtime.
+# ===========================================================================
+
+services:
+  ollama:
+    enabled: true
+
+    listener:
+      address: "0.0.0.0"
+      port: 11434
+      protocol: "http"
+
+    identity:
+      product: "ollama"
+      variant: "default"
+
+    default_headers:
+      Content-Type: "application/json"
+
+    routes:
+      - method: "GET"
+        path: "/"
+        classification: "version_discovery"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            body: |
+              Ollama is running
+
+
+      - method: "GET"
+        path: "/api/version"
+        classification: "version_discovery"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            body: |
+              {"version":"0.11.4"}
+
+      - method: "GET"
+        path: "/api/tags"
+        classification: "model_discovery"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            body: "{\"models\":[{\"name\":\"llama3.2:latest\",\"model\":\"llama3.2:latest\",\"modified_at\":\"2025-05-04T17:37:44.706015396-07:00\",\"size\":2019393189,\"digest\":\"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72\",\"details\":{\"parent_model\":\"\",\"format\":\"gguf\",\"family\":\"llama\",\"families\":[\"llama\"],\"parameter_size\":\"3.2B\",\"quantization_level\":\"Q4_K_M\"}}]}"
+
+      - method: "GET"
+        path: "/api/ps"
+        classification: "model_discovery"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            body: "{\"models\":[]}"
+
+      - method: "POST"
+        path: "/api/show"
+        classification: "metadata_discovery"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            body: "{\"parameters\":\"stop \\\"<|start_header_id|>\\\"\\nstop \\\"<|end_header_id|>\\\"\\nstop \\\"<|eot_id|>\\\"\",\"details\":{\"parent_model\":\"\",\"format\":\"gguf\",\"family\":\"llama\",\"families\":[\"llama\"],\"parameter_size\":\"3.2B\",\"quantization_level\":\"Q4_K_M\"},\"model_info\":{\"general.architecture\":\"llama\",\"llama.attention.head_count\":24,\"llama.attention.head_count_kv\":8,\"llama.attention.key_length\":128,\"llama.attention.layer_norm_rms_epsilon\":0.00001,\"llama.attention.value_length\":128,\"llama.block_count\":28,\"llama.context_length\":131072,\"llama.embedding_length\":3072,\"llama.feed_forward_length\":8192,\"llama.rope.dimension_count\":128,\"llama.rope.freq_base\":500000,\"llama.vocab_size\":128256,\"tokenizer.ggml.bos_token_id\":128000,\"tokenizer.ggml.eos_token_id\":128009,\"tokenizer.ggml.model\":\"gpt2\",\"tokenizer.ggml.pre\":\"llama-bpe\"},\"capabilities\":[\"completion\",\"tools\"]}"
+
+      - method: "POST"
+        path: "/api/generate"
+        classification: "inference_attempt"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "ndjson"
+            headers:
+              Content-Type: "application/x-ndjson"
+            chunks:
+              - delay_ms: 50
+                body: "{\"model\":\"llama3.2:latest\",\"created_at\":\"2025-07-07T20:22:19.193140Z\",\"response\":\"Hello\",\"done_reason\":\"stop\",\"done\":true,\"total_duration\":182242375,\"load_duration\":41295167,\"prompt_eval_count\":12,\"prompt_eval_duration\":24573166,\"eval_count\":2,\"eval_duration\":115959084}\n"
+
+      - method: "POST"
+        path: "/api/chat"
+        classification: "inference_attempt"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "ndjson"
+            headers:
+              Content-Type: "application/x-ndjson"
+            chunks:
+              - delay_ms: 50
+                body: "{\"model\":\"llama3.2:latest\",\"created_at\":\"2025-07-07T20:22:19.193140Z\",\"message\":{\"role\":\"assistant\",\"content\":\"Hello\"},\"done_reason\":\"stop\",\"done\":true,\"total_duration\":182242375,\"load_duration\":41295167,\"prompt_eval_count\":12,\"prompt_eval_duration\":24573166,\"eval_count\":2,\"eval_duration\":115959084}\n"
+
+    default_response:
+      status: 404
+      headers:
+        Content-Type: "application/json"
+      body: |
+        {"error":"404 page not found"}
+
+
+  vllm:
+    enabled: false
+
+    listener:
+      address: "0.0.0.0"
+      port: 8000
+      protocol: "http"
+
+    identity:
+      product: "vllm"
+      variant: "default"
+
+    # vLLM STATIC FIXTURE POLICY
+    # Every vLLM response below is complete static fixture data. Nothing is
+    # generated from request content at runtime. Only capabilities already used
+    # by the existing generic HTTP engine are used here.
+    #
+    # Do not define service-wide Content-Type here because health responses have
+    # an empty body while discovery responses are JSON. Headers are therefore
+    # defined per response where required.
+    routes:
+      - method: "GET"
+        path: "/health"
+        classification: "health_check"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            body: ""
+
+      - method: "GET"
+        path: "/ping"
+        classification: "health_check"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            body: ""
+
+      - method: "POST"
+        path: "/ping"
+        classification: "health_check"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            body: ""
+
+      - method: "GET"
+        path: "/version"
+        classification: "version_discovery"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json"
+            body: |
+              {"version":"0.27.0"}
+
+      - method: "GET"
+        path: "/v1/models"
+        classification: "model_discovery"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json"
+            body: >-
+              {"object":"list","data":[{"id":"Qwen/Qwen2.5-1.5B-Instruct","object":"model","created":1787126400,"owned_by":"vllm","root":"Qwen/Qwen2.5-1.5B-Instruct","parent":null,"max_model_len":32768,"permission":[{"id":"modelperm-notaihoney-001","object":"model_permission","created":1787126400,"allow_create_engine":false,"allow_sampling":true,"allow_logprobs":true,"allow_search_indices":false,"allow_view":true,"allow_fine_tuning":false,"organization":"*","group":null,"is_blocking":false}]}]}
+
+    # Any request whose method/path is not explicitly defined above is handled
+    # by this single static fallback response. This includes GET /, inference
+    # endpoints such as /v1/completions and /v1/chat/completions, and all other
+    # undefined vLLM requests.
+    default_response:
+      status: 404
+      headers:
+        Content-Type: "application/json"
+      body: |
+        {"detail":"Not Found"}
+
+
+  tgi:
+    enabled: true
+
+    listener:
+      address: "0.0.0.0"
+      port: 3000
+      protocol: "http"
+
+    identity:
+      product: "tgi"
+      variant: "default"
+
+    # HUGGING FACE TGI STATIC FIXTURE POLICY
+    # Target personality: Hugging Face Text Generation Inference 3.3.5.
+    # Every TGI response below is complete literal fixture data. No response is
+    # generated, templated, interpolated or selected from request-body content.
+    # The incoming request is evidence only; it does not affect response data.
+    #
+    # /generate_stream deliberately uses the existing immediate response mode.
+    # Its body is a complete hardcoded Server-Sent Events payload. This preserves
+    # TGI's text/event-stream wire format without adding a TGI-specific response
+    # mode or any new product logic to the Go engine.
+    routes:
+      - method: "GET"
+        path: "/health"
+        classification: "health_check"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            body: ""
+
+      - method: "GET"
+        path: "/info"
+        classification: "metadata_discovery"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json"
+            body: >-
+              {"model_id":"Qwen/Qwen2.5-1.5B-Instruct","model_sha":null,"model_pipeline_tag":"text-generation","max_concurrent_requests":128,"max_best_of":2,"max_stop_sequences":4,"max_input_tokens":32768,"max_total_tokens":32768,"validation_workers":2,"max_client_batch_size":32,"router":"text-generation-router","version":"3.3.5","sha":null,"docker_label":null}
+
+      - method: "GET"
+        path: "/v1/models"
+        classification: "model_discovery"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json"
+            body: >-
+              {"object":"list","data":[{"id":"Qwen/Qwen2.5-1.5B-Instruct","object":"model","created":0,"owned_by":"Qwen/Qwen2.5-1.5B-Instruct"}]}
+
+      - method: "GET"
+        path: "/metrics"
+        classification: "metadata_discovery"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "text/plain; charset=utf-8"
+            body: |
+              # HELP tgi_queue_size Current number of requests waiting in the queue.
+              # TYPE tgi_queue_size gauge
+              tgi_queue_size 0
+              # HELP tgi_request_count Total number of requests received.
+              # TYPE tgi_request_count counter
+              tgi_request_count 17
+              # HELP tgi_request_success Total number of successful requests.
+              # TYPE tgi_request_success counter
+              tgi_request_success 16
+
+      - method: "POST"
+        path: "/generate"
+        classification: "inference_attempt"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json"
+              X-Compute-Type: "gpu+optimized"
+              X-Compute-Time: "0.142"
+              X-Compute-Characters: "25"
+              X-Total-Time: "142"
+              X-Validation-Time: "1"
+              X-Queue-Time: "2"
+              X-Inference-Time: "139"
+              X-Time-Per-Token: "46"
+              X-Prompt-Tokens: "6"
+              X-Generated-Tokens: "3"
+            body: >-
+              {"generated_text":" Hello! How can I help you today?"}
+
+      - method: "POST"
+        path: "/generate_stream"
+        classification: "inference_attempt"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "text/event-stream"
+              Cache-Control: "no-cache"
+              X-Accel-Buffering: "no"
+              X-Compute-Type: "gpu+optimized"
+              X-Compute-Characters: "25"
+            body: |
+              data: {"index":1,"token":{"id":9707,"text":" Hello","logprob":-0.1201,"special":false},"generated_text":null,"details":null}
+
+              data: {"index":2,"token":{"id":0,"text":"!","logprob":-0.0312,"special":false},"generated_text":" Hello!","details":null}
+
+      - method: "POST"
+        path: "/tokenize"
+        classification: "metadata_discovery"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json"
+            body: >-
+              [{"id":9707,"text":"Hello","start":0,"stop":5}]
+
+      - method: "POST"
+        path: "/chat_tokenize"
+        classification: "metadata_discovery"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json"
+            body: >-
+              {"tokenize_response":[{"id":151644,"text":"","start":0,"stop":0},{"id":872,"text":"user","start":12,"stop":16},{"id":198,"text":"\n","start":16,"stop":17},{"id":9707,"text":"Hello","start":17,"stop":22},{"id":151645,"text":"","start":22,"stop":22},{"id":198,"text":"\n","start":22,"stop":23},{"id":151644,"text":"","start":23,"stop":23},{"id":77091,"text":"assistant","start":35,"stop":44},{"id":198,"text":"\n","start":44,"stop":45}],"templated_text":"<|im_start|>user\nHello<|im_end|>\n<|im_start|>assistant\n"}
+
+    # All methods/paths not explicitly defined above receive the same static
+    # fallback. No request parsing or product-specific error synthesis is used.
+    default_response:
+      status: 404
+      body: ""
+
+
+
+  nvidia_nim:
+    enabled: true
+
+    listener:
+      address: "0.0.0.0"
+      port: 8000
+      protocol: "http"
+
+    identity:
+      product: "nvidia_nim"
+      variant: "llm"
+
+    # NVIDIA NIM STATIC FIXTURE POLICY
+    # Target personality: NVIDIA NIM for LLMs 3.0.0, exposed on TCP/9000.
+    # Port 9000 is intentionally configured here so NIM can coexist with the
+    # vLLM personality already bound to TCP/8000.
+    #
+    # Every response below is complete literal fixture data. No response is
+    # generated, templated, interpolated or selected from request-body content.
+    # Incoming request bodies are evidence only; they do not affect responses.
+    #
+    # The inference endpoints deliberately return one fixed non-streaming JSON
+    # response even when a client requests streaming. This keeps the personality
+    # fully YAML-defined and requires no NIM-specific logic in the Go engine.
+    default_headers:
+      Server: "nginx/1.18.0 (Ubuntu)"
+
+    routes:
+      - method: "GET"
+        path: "/v1/health/live"
+        classification: "health_check"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json"
+              Cache-Control: "no-store, no-cache, must-revalidate"
+            body: >-
+              {"object":"health.response","message":"live","status":"live"}
+
+      - method: "GET"
+        path: "/v1/health/ready"
+        classification: "health_check"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json"
+              Cache-Control: "no-store, no-cache, must-revalidate"
+            body: >-
+              {"object":"health.response","message":"ready","status":"ready"}
+
+      - method: "GET"
+        path: "/v1/models"
+        classification: "model_discovery"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json"
+            body: >-
+              {"object":"list","data":[{"id":"nvidia/nemotron-3-super-120b-a12b","object":"model","created":1787126400,"owned_by":"nvidia","root":"nvidia/nemotron-3-super-120b-a12b","parent":null,"max_model_len":131072}]}
+
+      - method: "GET"
+        path: "/v1/version"
+        classification: "version_discovery"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json"
+            body: >-
+              {"version":"3.0.0","openapi_version":"3.1.0"}
+
+      - method: "GET"
+        path: "/v1/metadata"
+        classification: "metadata_discovery"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json"
+            body: >-
+              {"model":"nvidia/nemotron-3-super-120b-a12b","model_profile":"notaihoney-nim-profile-001","model_profile_name":"NVIDIA Nemotron 3 Super 120B A12B","precision":"fp8","backend":"vllm","license":"NVIDIA AI Product Agreement"}
+
+      - method: "POST"
+        path: "/v1/chat/completions"
+        classification: "inference_attempt"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json"
+            body: >-
+              {"id":"chatcmpl-notaihoney-nim-001","object":"chat.completion","created":1787126400,"model":"nvidia/nemotron-3-super-120b-a12b","choices":[{"index":0,"message":{"role":"assistant","content":"Hello! How can I help you today?"},"logprobs":null,"finish_reason":"stop"}],"usage":{"prompt_tokens":7,"completion_tokens":9,"total_tokens":16}}
+
+      - method: "POST"
+        path: "/v1/completions"
+        classification: "inference_attempt"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json"
+            body: >-
+              {"id":"cmpl-notaihoney-nim-001","object":"text_completion","created":1787126400,"model":"nvidia/nemotron-3-super-120b-a12b","choices":[{"index":0,"text":"Hello! How can I help you today?","logprobs":null,"finish_reason":"stop"}],"usage":{"prompt_tokens":2,"completion_tokens":9,"total_tokens":11}}
+
+      - method: "POST"
+        path: "/v1/responses"
+        classification: "inference_attempt"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json"
+            body: >-
+              {"id":"resp-notaihoney-nim-001","object":"response","created_at":1787126400,"status":"completed","model":"nvidia/nemotron-3-super-120b-a12b","output":[{"id":"msg-notaihoney-nim-001","type":"message","status":"completed","role":"assistant","content":[{"type":"output_text","text":"Hello! How can I help you today?","annotations":[]}]}],"usage":{"input_tokens":6,"output_tokens":9,"total_tokens":15}}
+
+    # Every method/path not explicitly defined above receives one static JSON
+    # fallback. No request-dependent validation or error synthesis is performed.
+    default_response:
+      status: 404
+      headers:
+        Content-Type: "application/json"
+      body: |
+        {"detail":"Not Found"}
+
+
+
+  llamacpp:
+    enabled: true
+
+    listener:
+      address: "0.0.0.0"
+      port: 8080
+      protocol: "http"
+
+    identity:
+      product: "llamacpp"
+      variant: "default"
+
+    # LLAMA.CPP SERVER STATIC FIXTURE POLICY
+    # Every llama.cpp response below is complete literal fixture data. No
+    # response is generated, templated, interpolated or derived from request
+    # content at runtime. Incoming request bodies are evidence only.
+    #
+    # Only generic HTTP engine capabilities already used by the other simulated
+    # services are required: method/path routing, immediate static responses,
+    # per-response headers and one service-level static fallback.
+    default_headers:
+      Server: "llama.cpp"
+
+    routes:
+      - method: "GET"
+        path: "/health"
+        classification: "health_check"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json; charset=utf-8"
+            body: |
+              {"status":"ok"}
+
+      - method: "GET"
+        path: "/v1/health"
+        classification: "health_check"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json; charset=utf-8"
+            body: |
+              {"status":"ok"}
+
+      - method: "GET"
+        path: "/props"
+        classification: "metadata_discovery"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json; charset=utf-8"
+            body: >-
+              {"default_generation_settings":{"n_predict":-1,"seed":4294967295,"temperature":0.8,"top_k":40,"top_p":0.95,"min_p":0.05},"total_slots":1,"model_path":"/models/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf","chat_template":"{% for message in messages %}{{ '<|im_start|>' + message['role'] + '\n' + message['content'] + '<|im_end|>\n' }}{% endfor %}{% if add_generation_prompt %}{{ '<|im_start|>assistant\n' }}{% endif %}","chat_template_caps":{},"modalities":{"vision":false},"build_info":"b6100-notaihoney","is_sleeping":false}
+
+      - method: "GET"
+        path: "/slots"
+        classification: "metadata_discovery"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json; charset=utf-8"
+            body: >-
+              [{"id":0,"id_task":-1,"n_ctx":32768,"speculative":false,"is_processing":false,"params":{"n_predict":-1,"seed":4294967295,"temperature":0.8,"top_k":40,"top_p":0.95,"min_p":0.05},"next_token":{"has_next_token":true,"has_new_line":false,"n_remain":-1,"n_decoded":0}}]
+
+      - method: "GET"
+        path: "/v1/models"
+        classification: "model_discovery"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json; charset=utf-8"
+            body: >-
+              {"object":"list","data":[{"id":"/models/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf","object":"model","created":1787126400,"owned_by":"llamacpp","meta":{"vocab_type":2,"n_vocab":151936,"n_ctx_train":32768,"n_embd":1536,"n_params":1543714304,"size":986243072}}]}
+
+      - method: "POST"
+        path: "/completion"
+        classification: "inference_attempt"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json; charset=utf-8"
+            body: >-
+              {"content":"Hello! How can I help you today?","tokens":[],"id_slot":0,"stop":true,"model":"Qwen2.5-1.5B-Instruct-Q4_K_M.gguf","tokens_predicted":9,"tokens_evaluated":2,"generation_settings":{"n_predict":-1,"seed":4294967295,"temperature":0.8,"top_k":40,"top_p":0.95,"min_p":0.05},"prompt":"Hello","has_new_line":false,"truncated":false,"stop_type":"eos","stopping_word":"","tokens_cached":0,"timings":{"prompt_n":2,"prompt_ms":23.41,"prompt_per_token_ms":11.705,"prompt_per_second":85.43,"predicted_n":9,"predicted_ms":176.58,"predicted_per_token_ms":19.62,"predicted_per_second":50.97}}
+
+      - method: "POST"
+        path: "/v1/completions"
+        classification: "inference_attempt"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json; charset=utf-8"
+            body: >-
+              {"choices":[{"finish_reason":"stop","index":0,"text":"Hello! How can I help you today?"}],"created":1787126400,"model":"Qwen2.5-1.5B-Instruct-Q4_K_M.gguf","system_fingerprint":"b6100-notaihoney","object":"text_completion","usage":{"completion_tokens":9,"prompt_tokens":2,"total_tokens":11},"id":"cmpl-notaihoney-llamacpp-001","timings":{"prompt_n":2,"prompt_ms":23.41,"predicted_n":9,"predicted_ms":176.58}}
+
+      - method: "POST"
+        path: "/v1/chat/completions"
+        classification: "inference_attempt"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json; charset=utf-8"
+            body: >-
+              {"choices":[{"finish_reason":"stop","index":0,"message":{"role":"assistant","content":"Hello! How can I help you today?"}}],"created":1787126400,"model":"Qwen2.5-1.5B-Instruct-Q4_K_M.gguf","system_fingerprint":"b6100-notaihoney","object":"chat.completion","usage":{"completion_tokens":9,"prompt_tokens":7,"total_tokens":16},"id":"chatcmpl-notaihoney-llamacpp-001","timings":{"prompt_n":7,"prompt_ms":49.72,"predicted_n":9,"predicted_ms":176.58}}
+
+      - method: "POST"
+        path: "/tokenize"
+        classification: "metadata_discovery"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json; charset=utf-8"
+            body: |
+              {"tokens":[9707]}
+
+      - method: "POST"
+        path: "/detokenize"
+        classification: "metadata_discovery"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json; charset=utf-8"
+            body: |
+              {"content":"Hello"}
+
+    # Every method/path not explicitly defined above receives the same static
+    # llama.cpp-style fallback. No request-dependent error generation is used.
+    default_response:
+      status: 404
+      headers:
+        Content-Type: "application/json; charset=utf-8"
+      body: |
+        {"error":{"message":"File Not Found","type":"not_found_error","code":404}}
+
+
+
+  tensorflow_serving:
+    enabled: true
+
+    listener:
+      address: "0.0.0.0"
+      port: 8501
+      protocol: "http"
+
+    identity:
+      product: "tensorflow_serving"
+      variant: "default"
+
+    # TENSORFLOW SERVING STATIC FIXTURE POLICY
+    # REST/HTTP only. The standard gRPC listener on TCP/8500 is intentionally
+    # not simulated so the generic HTTP engine remains sufficient.
+    #
+    # Every response below is complete literal fixture data. No prediction,
+    # regression, classification, model selection, version selection, metadata
+    # generation, request parsing or response interpolation is performed at
+    # runtime. Incoming request bodies are evidence only.
+    routes:
+      # TensorFlow Serving's REST API does not register GET / as an API route.
+      # Keep this explicit because the root probe is an HTML 404 rather than a
+      # TensorFlow REST JSON error.
+      - method: "GET"
+        path: "/"
+        classification: "metadata_discovery"
+        responses:
+          - sequence: default
+            status: 404
+            response_mode: "immediate"
+            headers:
+              Content-Type: "text/html"
+            body: |
+              <HTML><HEAD>
+              <TITLE>404 Not Found</TITLE>
+              </HEAD><BODY>
+              <H1>Not Found</H1>
+              </BODY></HTML>
+
+      - method: "GET"
+        path: "/v1/models/saved_model_half_plus_three"
+        classification: "model_discovery"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json"
+            body: >-
+              {"model_version_status":[{"version":"123","state":"AVAILABLE","status":{"error_code":"OK","error_message":""}}]}
+
+      - method: "GET"
+        path: "/v1/models/saved_model_half_plus_three/versions/123"
+        classification: "model_discovery"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json"
+            body: >-
+              {"model_version_status":[{"version":"123","state":"AVAILABLE","status":{"error_code":"OK","error_message":""}}]}
+
+      - method: "GET"
+        path: "/v1/models/saved_model_half_plus_three/metadata"
+        classification: "metadata_discovery"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json"
+            body: >-
+              {"model_spec":{"name":"saved_model_half_plus_three","signature_name":"","version":"123"},"metadata":{"signature_def":{"signature_def":{"serving_default":{"inputs":{"x":{"dtype":"DT_FLOAT","tensor_shape":{"dim":[{"size":"-1","name":""}],"unknown_rank":false},"name":"x:0"}},"outputs":{"y":{"dtype":"DT_FLOAT","tensor_shape":{"dim":[{"size":"-1","name":""}],"unknown_rank":false},"name":"y:0"}},"method_name":"tensorflow/serving/predict"}}}}}
+
+      - method: "GET"
+        path: "/v1/models/saved_model_half_plus_three/versions/123/metadata"
+        classification: "metadata_discovery"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json"
+            body: >-
+              {"model_spec":{"name":"saved_model_half_plus_three","signature_name":"","version":"123"},"metadata":{"signature_def":{"signature_def":{"serving_default":{"inputs":{"x":{"dtype":"DT_FLOAT","tensor_shape":{"dim":[{"size":"-1","name":""}],"unknown_rank":false},"name":"x:0"}},"outputs":{"y":{"dtype":"DT_FLOAT","tensor_shape":{"dim":[{"size":"-1","name":""}],"unknown_rank":false},"name":"y:0"}},"method_name":"tensorflow/serving/predict"}}}}}
+
+      - method: "POST"
+        path: "/v1/models/saved_model_half_plus_three:predict"
+        classification: "inference_attempt"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json"
+            body: >-
+              {"predictions":[3.5,4.0,5.5]}
+
+      - method: "POST"
+        path: "/v1/models/saved_model_half_plus_three/versions/123:predict"
+        classification: "inference_attempt"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json"
+            body: >-
+              {"predictions":[3.5,4.0,5.5]}
+
+      - method: "POST"
+        path: "/v1/models/saved_model_half_plus_three:regress"
+        classification: "inference_attempt"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json"
+            body: >-
+              {"results":[3.5,4.0]}
+
+      - method: "POST"
+        path: "/v1/models/saved_model_half_plus_three:classify"
+        classification: "inference_attempt"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json"
+            body: >-
+              {"results":[[["",3.5]]]}
+
+    # All other methods/paths receive one static TensorFlow REST-style error.
+    # The requested URI/model is intentionally not inserted into the response.
+    default_response:
+      status: 404
+      headers:
+        Content-Type: "application/json"
+      body: |
+        {"error":"Servable not found for request"}
+
+# ---------------------------------------------------------------------------
+# OPTIONAL OFFLINE ANALYSIS
+# Used only by: notaihoney index
+# The live serve path does not depend on SQLite.
+# ---------------------------------------------------------------------------
+
+analysis:
+  sqlite:
+    path: "/var/lib/notaihoney/index/honeypot.db"
