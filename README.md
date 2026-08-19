@@ -1,390 +1,211 @@
 # notAIhoney
 
-**notAIhoney** is a small, standalone Linux honeypot for exposed AI inference and model-serving APIs.
+**notAIhoney** is a Linux honeypot for exposed AI inference and model-serving APIs.
 
-It impersonates AI services, preserves network and application evidence, and returns deterministic synthetic responses without running a real LLM or executing attacker-controlled actions.
+It presents believable AI-service endpoints, records network and application activity, and returns synthetic responses without running a real LLM or executing attacker-controlled actions.
 
 **Owner:** Denis Laskov  
 **Year:** 2026  
-**Architecture:** v1.3  
-**Implementation:** Go  
+**Current milestone:** Ollama emulation  
+**Platform:** Ubuntu 24.04 LTS  
 **License:** Free for personal use
 
 ---
 
-## Current Status
+## 1. What it does
 
-Milestone 1 is focused on **Ollama emulation** and has progressed from architecture into implementation and Ubuntu runtime deployment validation.
-
-The current project includes:
-
-- Go-based `notaihoney` executable
-- `serve`, `capture`, `check`, and offline `index` modes
-- one strict global YAML configuration
-- Ollama API simulation on TCP/11434
-- HTTP/1.0 and HTTP/1.1 support
-- HTTPS carrying HTTP/1.1
-- immediate and NDJSON response modes
-- PCAPNG capture through `dumpcap`
-- Binary Wire Journal (BWJ) evidence
-- structured JSONL events
-- optional offline SQLite indexing
-- separate systemd units for serving and packet capture
-- capture readiness through `/run/notaihoney/capture.sock`
-- validated listener export for firewall generation
-- Ubuntu 24.04 runtime installer and release packaging
-
-Runtime deployment validation has reached successful capture readiness, configuration/operational checks, listener export, firewall-rule generation/validation, and active serving/capture services.
-
-Firewall loading remains an explicit deployment action rather than an automatic side effect.
-
----
-
-## Core Design
-
-notAIhoney follows three project principles:
-
-1. **Keep the engine simple.**
-2. **Run as a standalone sandboxed sensor.**
-3. **Keep all operator-configurable behavior in one YAML file.**
-
-The central architecture rule is:
-
-> **Go implements generic honeypot mechanisms. `honeypot.yaml` defines simulated service behavior.**
-
-Product-specific routes, versions, model identities, responses, delays, classifications, and fallback behavior must not be hardcoded in Go.
-
-A future AI service should normally be added by extending:
+The current version simulates an **Ollama** service, normally exposed on:
 
 ```text
-config/honeypot.yaml
+TCP/11434
 ```
 
-without modifying the Go engine.
-
----
-
-## Milestone 1 — Ollama
-
-The first simulated service is Ollama.
-
-Configured routes include:
+Supported API routes include:
 
 ```text
 GET  /api/version
 GET  /api/tags
 GET  /api/ps
-
 POST /api/show
 POST /api/generate
 POST /api/chat
 ```
 
-The configured fake service remains internally consistent across discovery, metadata, inference, and streaming responses.
+notAIhoney records activity at several levels:
 
-No real inference is performed.
+- **PCAPNG** — packet-level network evidence captured by `dumpcap`
+- **BWJ** — exact application-level inbound and outbound bytes
+- **JSONL** — structured forensic events
+- **SQLite** — optional offline analytical index built from collected evidence
 
----
-
-## Runtime Architecture
-
-```text
-Internet
-   |
-   +-----------------------> notaihoney capture
-   |                              |
-   |                           dumpcap
-   |                              |
-   |                           PCAPNG
-   |                              |
-   |                    /run/notaihoney/capture.sock
-   |                              |
-   v                              v
-notaihoney serve <----------------+
-   |
-HTTP / HTTPS
-   |
-BWJ plaintext recording
-   |
-Go HTTP/1.x parser
-   |
-method + raw-path matcher
-   |
-/etc/notaihoney/honeypot.yaml
-   |
-generic response engine
-   |
-immediate / NDJSON
-   |
-BWJ outbound evidence
-   |
-Client
-   |
-bounded JSONL events
-
-offline:
-JSONL + BWJ -> optional SQLite index
-```
-
-The serving process does not require packet-capture privileges. Packet capture is isolated into a separate runtime identity and service.
+The honeypot does not execute attacker requests. It does not perform real inference, run tools or commands, download models, fetch attacker-controlled URLs, or act as an outbound proxy.
 
 ---
 
-## Single YAML Configuration
+## 2. Prerequisites
 
-Source configuration:
+This release is intended for an **isolated Ubuntu 24.04 LTS amd64/x86_64 host** using systemd.
 
-```text
-config/honeypot.yaml
-```
+Required:
 
-Installed configuration:
+- root or `sudo` access
+- an active network interface available for packet capture
+- `dumpcap` / Wireshark capture components
+- persistent local storage for evidence
+- systemd
+- **UFW installed and already active**
 
-```text
-/etc/notaihoney/honeypot.yaml
-```
+The installer does not own the host firewall configuration. It must not enable, disable, restart, or reconfigure UFW globally.
 
-The YAML owns:
+The current Ubuntu deployment also expects native `nftables.service` **not** to be active or enabled. notAIhoney uses administrator-managed UFW for exposure of validated honeypot listener ports.
 
-- sensor identity
-- evidence locations
-- resource limits
-- listeners
-- service identity
-- routes
-- classifications
-- response sequences
-- HTTP status codes
-- response headers
-- response bodies
-- timing
-- NDJSON chunks
-- fallback responses
-
-The exact configuration bytes are identified by `config_sha256`.
-
-Capture and serving must use the same configuration revision.
+A Go compiler is **not required** when installing from a prebuilt release bundle.
 
 ---
 
-## Evidence Model
+## 3. How to install
 
-Milestone 1 uses three live evidence layers:
+Extract the notAIhoney release archive and enter the extracted directory.
 
-```text
-PCAPNG + BWJ + JSONL
-```
+The release bundle contains the prebuilt binary, configuration, systemd services, and installer.
 
-**PCAPNG** preserves authoritative network-level evidence using `dumpcap`.
-
-**Binary Wire Journal (BWJ)** preserves exact application plaintext bytes observed by `notaihoney`. For HTTPS, PCAP contains encrypted network traffic while BWJ contains decrypted HTTP plaintext after TLS termination.
-
-**JSONL** stores bounded structured forensic events and correlation information.
-
-**SQLite** is optional and offline only. It is derived from preserved evidence and is not part of the live serving request path.
-
----
-
-## Capture Safety Contract
-
-Public listeners must not operate without healthy packet capture.
-
-The capture service exposes:
-
-```text
-/run/notaihoney/capture.sock
-```
-
-and reports readiness for the current `config_sha256`.
-
-If capture is unavailable or loses health, the serving process fails closed rather than continuing to attract traffic without required raw evidence.
-
-The Linux capture sandbox requires the address families needed for:
-
-```text
-AF_PACKET
-AF_UNIX
-AF_NETLINK
-```
-
-and only the packet-capture capabilities required by `dumpcap`.
-
----
-
-## Security Model
-
-notAIhoney never executes attacker intent.
-
-The serving path must never perform:
-
-- real LLM inference
-- shell execution
-- arbitrary command execution
-- tool execution
-- model downloads
-- attacker-controlled URL requests
-- callbacks
-- arbitrary outbound HTTP, DNS, or TCP
-- arbitrary file execution
-- access to production systems
-- proxy or tunnel behavior
-
-Every interaction follows:
-
-```text
-receive
-   ↓
-preserve
-   ↓
-parse
-   ↓
-classify / match
-   ↓
-synthetically respond
-   ↓
-preserve
-```
-
----
-
-## Executable
-
-The project produces one binary:
-
-```text
-/usr/local/bin/notaihoney
-```
-
-Milestone 1 modes:
+Run:
 
 ```bash
-notaihoney serve   --config /etc/notaihoney/honeypot.yaml
-notaihoney capture --config /etc/notaihoney/honeypot.yaml
-notaihoney check   --config /etc/notaihoney/honeypot.yaml
-notaihoney index   --config /etc/notaihoney/honeypot.yaml
+sudo ./installer_ubuntu24_runtime.sh
 ```
 
-Validated listener information can be exported for deployment tooling:
+The installer performs the required runtime setup, including:
+
+- dependency and host validation
+- creation of the `notaihoney` runtime identities
+- installation of the binary and YAML configuration
+- evidence-directory preparation
+- capture-interface selection
+- `dumpcap` permission validation
+- installation of the capture and serving systemd services
+- capture readiness validation
+- configuration and operational checks
+- validated listener export
+
+### Firewall application
+
+Public listener exposure is an explicit installation step.
+
+When firewall application is requested, the installer derives the required TCP ports from:
+
+```text
+honeypot.yaml
+    ↓
+notaihoney validation
+    ↓
+validated listener JSON
+    ↓
+generated UFW application profile
+```
+
+The generated profile is stored under:
+
+```text
+/etc/ufw/applications.d/notaihoney
+```
+
+Only the notAIhoney UFW application rule is managed by the installer.
+
+The installer must not modify global UFW policy or native nftables configuration.
+
+After installation, verify:
 
 ```bash
-notaihoney check \
-  --config /etc/notaihoney/honeypot.yaml \
-  --emit-listeners=json
+sudo systemctl status notaihoney-capture.service
+sudo systemctl status notaihoney.service
 ```
+
+The capture service must be healthy before the public honeypot service is allowed to run.
 
 ---
 
-## Deployment
+## 4. How to use the output files
 
-The runtime currently targets Ubuntu 24.04 LTS.
-
-Main installed paths:
+The main evidence directory is:
 
 ```text
-/usr/local/bin/notaihoney
-
-/etc/notaihoney/
-├── honeypot.yaml
-├── base.nft
-├── listeners.json
-└── generated-listeners.nft
-
-/run/notaihoney/
-└── capture.sock
-
 /var/lib/notaihoney/
-├── pcap/
-├── journal/
-├── events/
-└── index/
 ```
 
-Service separation:
+### Packet capture
 
 ```text
-notaihoney-capture.service
-        ↓
-notaihoney capture
-        ↓
-dumpcap
-        ↓
-capture READY
-        ↓
-notaihoney.service
-        ↓
-notaihoney serve
-        ↓
-public listeners
+/var/lib/notaihoney/pcap/
 ```
 
-The deployment tooling validates capture permissions, runtime directories, service hardening, configuration, listener export, and firewall inputs before considering the runtime ready.
+Contains PCAPNG files produced by `dumpcap`.
 
-Firewall changes require explicit operator approval/application.
+Use these files with tools such as Wireshark or tshark to inspect connection attempts, TCP behavior, malformed traffic, retransmissions, resets, and complete network conversations.
+
+### Binary Wire Journal
+
+```text
+/var/lib/notaihoney/journal/
+```
+
+Contains the application-level wire journal.
+
+BWJ preserves the exact bytes observed by the honeypot before and after HTTP processing and is useful when reconstructing individual request/response exchanges.
+
+### JSON output example
+
+A sample structured JSON event output is shown below:
+
+![notAIhoney JSON output example](samples/json_img.png)
+
+### Structured events
+
+```text
+/var/lib/notaihoney/events/
+```
+
+Contains JSONL event files.
+
+These are the easiest files to use for searching activity, filtering requests, identifying source IPs, reviewing matched routes and classifications, and correlating requests with responses.
+
+Example:
+
+```bash
+jq . /var/lib/notaihoney/events/*.jsonl
+```
+
+### Offline SQLite index
+
+```text
+/var/lib/notaihoney/index/
+```
+
+SQLite is a derived analytical format and is not authoritative evidence.
+
+The index can be created or refreshed offline with the `index` mode of the `notaihoney` binary.
+
+### Collecting evidence
+
+Project deployment tooling also includes an evidence-collection workflow for archiving the current contents of the notAIhoney evidence directories without stopping the running sensor.
+
+Collected archives should be stored outside `/var/lib/notaihoney`, under the invoking administrator's home directory.
 
 ---
 
-## Repository Structure
+## 5. Next steps
 
-```text
-notaihoney/
-├── cmd/
-│   └── notaihoney/
-│       └── main.go
-├── internal/
-│   ├── config/
-│   ├── engine/
-│   ├── response/
-│   ├── evidence/
-│   ├── capture/
-│   └── index/
-├── config/
-│   └── honeypot.yaml
-├── deploy/
-│   ├── systemd/
-│   │   ├── notaihoney.service
-│   │   └── notaihoney-capture.service
-│   └── nftables/
-│       └── base.nft
-├── scripts/
-│   ├── installer_ubuntu24_runtime.sh
-│   ├── listeners-to-nft.sh
-│   └── packer.sh
-├── tests/
-├── go.mod
-├── go.sum
-├── README.md
-└── LICENSE
-```
+The current milestone is focused on completing and validating the Ollama sensor.
 
----
+Planned work includes:
 
-## Requirements
+- complete Milestone 1 fixture validation
+- continue malformed, slow-client, load, and resource-limit testing
+- improve deployment and evidence-handling validation
+- expand forensic analysis and indexing workflows
+- add additional AI-service simulations through `honeypot.yaml`
 
-Build/runtime requirements include:
-
-- Linux
-- Go 1.23.2 for the current reproducible build baseline
-- CGO-enabled build environment
-- C compiler/toolchain
-- `dumpcap`
-- persistent local evidence storage
-- systemd for the current deployment model
-
-No GPU or real LLM runtime is required.
-
-The architecture target remains:
-
-```text
->= 5 requests/second per exposed service port
-```
-
-with bounded behavior for malformed, slow, oversized, and long-lived connections.
-
----
-
-## Future Services
-
-The same engine is intended to support additional YAML-defined AI HTTP services such as:
+Planned future service targets include:
 
 - vLLM
 - NVIDIA NIM
@@ -392,15 +213,22 @@ The same engine is intended to support additional YAML-defined AI HTTP services 
 - llama.cpp server
 - NVIDIA Triton
 - TensorFlow Serving
-- KServe-compatible services
+- KServe-compatible APIs
 
-Go changes are acceptable only when a new service requires a **generic reusable engine capability**.
+The guiding rule remains:
 
----
-
-## Guiding Rule
-
-> **Keep the daemon small and generic. Keep configuration in one YAML file. Preserve raw evidence before interpretation. Execute nothing requested by the attacker.**
+> **Keep the Go engine small and generic, keep simulated service behavior in one YAML file, preserve evidence, and execute nothing requested by the attacker.**
 
 ---
 
+## 6. Credits
+
+**notAIhoney** was created and is maintained by **Denis Laskov**.
+
+Copyright © 2026 Denis Laskov.
+
+Free for personal, non-commercial use.
+
+Commercial use, redistribution as part of a commercial product or service, or other commercial exploitation requires explicit permission from the owner.
+
+The software is provided as-is, without warranty.
