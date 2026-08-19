@@ -24,14 +24,17 @@ tar -czf "$ARCHIVE" \
     deploy/nftables/base.nft \
     scripts
 
-# Verify that the installer is stored only at the archive root.
-if ! tar -tzf "$ARCHIVE" | grep -Fxq 'installer_ubuntu24_runtime.sh'; then
+ARCHIVE_CONTENTS="$(tar -tzf "$ARCHIVE")"
+
+# Verify that the installer exists at archive root.
+if ! grep -Fxq 'installer_ubuntu24_runtime.sh' <<< "$ARCHIVE_CONTENTS"; then
     echo "Error: archive does not contain installer_ubuntu24_runtime.sh at its root" >&2
     rm -f "$ARCHIVE"
     exit 1
 fi
 
-if tar -tzf "$ARCHIVE" | grep -Fxq 'scripts/installer_ubuntu24_runtime.sh'; then
+# Verify that the installer does not also exist under scripts/.
+if grep -Fxq 'scripts/installer_ubuntu24_runtime.sh' <<< "$ARCHIVE_CONTENTS"; then
     echo "Error: installer was also stored under scripts/" >&2
     rm -f "$ARCHIVE"
     exit 1
