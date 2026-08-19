@@ -6,7 +6,7 @@ It presents believable AI-service endpoints, records network and application act
 
 **Owner:** Denis Laskov  
 **Year:** 2026  
-**Current services:** Ollama, vLLM, and Hugging Face TGI  
+**Current services:** Ollama, vLLM, Hugging Face TGI, and llama.cpp server  
 **Platform:** Ubuntu 24.04 LTS  
 **License:** Free for personal use
 
@@ -20,6 +20,7 @@ The current version includes enabled and tested simulations for:
 Ollama            -> TCP/11434
 vLLM              -> TCP/8000
 Hugging Face TGI  -> TCP/3000
+llama.cpp server  -> TCP/8080
 ```
 
 ### Ollama
@@ -46,6 +47,12 @@ As with Ollama, vLLM behavior is defined in `honeypot.yaml` and does not require
 Hugging Face Text Generation Inference (TGI) simulation is enabled and tested on TCP/3000 using YAML-defined static responses.
 
 TGI behavior is also defined in `honeypot.yaml` and does not require product-specific Go logic.
+
+### llama.cpp server
+
+llama.cpp server simulation is enabled and tested on TCP/8080 using YAML-defined static responses.
+
+As with the other simulated services, llama.cpp server behavior is defined in `honeypot.yaml` and does not require product-specific Go logic.
 
 notAIhoney records activity at several levels:
 
@@ -155,6 +162,7 @@ When deploying notAIhoney in a cloud environment, update the instance or network
 Ollama            -> TCP/11434
 vLLM              -> TCP/8000
 Hugging Face TGI  -> TCP/3000
+llama.cpp server  -> TCP/8080
 ```
 
 These cloud security-group rules are separate from the host firewall configuration on the Ubuntu machine.
@@ -240,7 +248,7 @@ Collected archives should be stored outside `/var/lib/notaihoney`, under the inv
 
 ## 5. Next steps
 
-The current release includes enabled and tested Ollama, vLLM, and Hugging Face TGI simulations.
+The current release includes enabled and tested Ollama, vLLM, Hugging Face TGI, and llama.cpp server simulations.
 
 Planned work includes:
 
@@ -253,7 +261,6 @@ Planned work includes:
 Planned future service targets include:
 
 - NVIDIA NIM
-- llama.cpp server
 - NVIDIA Triton
 - TensorFlow Serving
 - KServe-compatible APIs
