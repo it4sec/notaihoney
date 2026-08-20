@@ -6,7 +6,7 @@ It presents believable AI-service endpoints, records network and application act
 
 **Owner:** Denis Laskov  
 **Year:** 2026  
-**Current services:** Ollama, vLLM, Hugging Face TGI, llama.cpp server, TensorFlow Serving, and NVIDIA NIM  
+**Current services:** Ollama, vLLM, Hugging Face TGI, llama.cpp server, TensorFlow Serving, NVIDIA NIM, and NVIDIA Triton  
 **Platform:** Ubuntu 24.04 LTS  
 **License:** Free for personal use
 
@@ -20,50 +20,64 @@ The current version includes enabled and tested simulations for:
 Ollama              -> TCP/11434
 vLLM                -> TCP/8000
 NVIDIA NIM          -> TCP/8000
+NVIDIA Triton       -> TCP/8000
 Hugging Face TGI    -> TCP/3000
 llama.cpp server    -> TCP/8080
 TensorFlow Serving  -> TCP/8501
 ```
 
-> **Port conflict:** vLLM and NVIDIA NIM both use TCP/8000 in the current configuration. On the same network interface, only one of these two services can be enabled at a time.
+> **Port conflict:** vLLM, NVIDIA NIM, and NVIDIA Triton all use TCP/8000 in the current configuration. On the same network interface, only one of these three services can be enabled at a time.
 
 ### Ollama
 
-Ollama simulation is enabled and tested on TCP/11434 using YAML-defined static responses.
-Ollama behavior is defined in `honeypot.yaml` 
+Supported Ollama API routes include:
 
+```text
+GET  /api/version
+GET  /api/tags
+GET  /api/ps
+POST /api/show
+POST /api/generate
+POST /api/chat
+```
 
 ### vLLM
 
 vLLM simulation is also enabled and tested on TCP/8000 using YAML-defined static responses.
 
-As with Ollama, vLLM behavior is defined in `honeypot.yaml` 
+As with Ollama, vLLM behavior is defined in `honeypot.yaml` and does not require product-specific Go logic.
 
 ### Hugging Face TGI
 
 Hugging Face Text Generation Inference (TGI) simulation is enabled and tested on TCP/3000 using YAML-defined static responses.
 
-TGI behavior is also defined in `honeypot.yaml` 
+TGI behavior is also defined in `honeypot.yaml` and does not require product-specific Go logic.
 
 ### llama.cpp server
 
 llama.cpp server simulation is enabled and tested on TCP/8080 using YAML-defined static responses.
 
-As with the other simulated services, llama.cpp server behavior is defined in `honeypot.yaml` 
+As with the other simulated services, llama.cpp server behavior is defined in `honeypot.yaml` and does not require product-specific Go logic.
 
 ### TensorFlow Serving
 
 TensorFlow Serving simulation is enabled and tested on TCP/8501 using YAML-defined static responses.
 
-TensorFlow Serving behavior is also defined in `honeypot.yaml` 
+TensorFlow Serving behavior is also defined in `honeypot.yaml` and does not require product-specific Go logic.
 
 ### NVIDIA NIM
 
 NVIDIA NIM simulation is enabled and tested on TCP/8000 using YAML-defined static responses.
 
-NVIDIA NIM behavior is defined in `honeypot.yaml` 
+NVIDIA NIM behavior is defined in `honeypot.yaml` and does not require product-specific Go logic.
 
-> **Important:** NVIDIA NIM and vLLM are both configured for TCP/8000. If they use the same network interface, only one of them can be enabled at a time. To run both simultaneously, configure different listener ports or different interfaces.
+### NVIDIA Triton
+
+NVIDIA Triton simulation is enabled and tested on TCP/8000 using YAML-defined static responses.
+
+NVIDIA Triton behavior is also defined in `honeypot.yaml` and does not require product-specific Go logic.
+
+> **Important:** vLLM, NVIDIA NIM, and NVIDIA Triton are all configured for TCP/8000. If they use the same network interface, only one of the three can be enabled at a time. To run more than one simultaneously, configure different listener ports or different interfaces.
 
 notAIhoney records activity at several levels:
 
@@ -87,11 +101,13 @@ Required:
 - `dumpcap` / Wireshark capture components
 - persistent local storage for evidence
 - systemd
-- UFW installed and already active
+- **UFW installed and already active**
+
+The installer does not own the host firewall configuration. It must not enable, disable, restart, or reconfigure UFW globally.
 
 The current Ubuntu deployment also expects native `nftables.service` **not** to be active or enabled. notAIhoney uses administrator-managed UFW for exposure of validated honeypot listener ports.
 
-A Go compiler is **not required** when installing from a prebuilt release bundle from `package/`
+A Go compiler is **not required** when installing from a prebuilt release bundle.
 
 ---
 
@@ -171,12 +187,13 @@ When deploying notAIhoney in a cloud environment, update the instance or network
 Ollama              -> TCP/11434
 vLLM                -> TCP/8000
 NVIDIA NIM          -> TCP/8000
+NVIDIA Triton       -> TCP/8000
 Hugging Face TGI    -> TCP/3000
 llama.cpp server    -> TCP/8080
 TensorFlow Serving  -> TCP/8501
 ```
 
-Because vLLM and NVIDIA NIM use the same TCP/8000 listener in the current configuration, exposing TCP/8000 allows whichever of those two services is enabled. They cannot both listen on the same interface and port at the same time.
+Because vLLM, NVIDIA NIM, and NVIDIA Triton use the same TCP/8000 listener in the current configuration, exposing TCP/8000 allows whichever of those services is enabled. On the same network interface, only one of the three can listen on TCP/8000 at a time.
 
 These cloud security-group rules are separate from the host firewall configuration on the Ubuntu machine.
 
@@ -261,7 +278,7 @@ Collected archives should be stored outside `/var/lib/notaihoney`, under the inv
 
 ## 5. Next steps
 
-The current release includes enabled and tested Ollama, vLLM, NVIDIA NIM, Hugging Face TGI, llama.cpp server, and TensorFlow Serving simulations.
+The current release includes enabled and tested Ollama, vLLM, NVIDIA NIM, NVIDIA Triton, Hugging Face TGI, llama.cpp server, and TensorFlow Serving simulations.
 
 Planned work includes:
 
@@ -273,7 +290,6 @@ Planned work includes:
 
 Planned future service targets include:
 
-- NVIDIA Triton
 - KServe-compatible APIs
 
 The guiding rule remains:
