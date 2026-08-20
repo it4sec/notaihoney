@@ -69,7 +69,7 @@ limits:
 
 # ===========================================================================
 # SIMULATED SERVICES
-# Personalities: Ollama + vLLM OpenAI-compatible API server + Hugging Face TGI + NVIDIA NIM + NVIDIA Triton + llama.cpp + TensorFlow Serving
+# Personalities: Ollama + vLLM OpenAI-compatible API server + Hugging Face TGI + NVIDIA NIM + NVIDIA Triton + llama.cpp + TensorFlow Serving + KServe-compatible APIs
 #
 # STATIC FIXTURE CONTRACT
 # Product-specific behavior remains entirely YAML-defined. Every response body,
@@ -971,6 +971,143 @@ services:
         Content-Type: "application/json"
       body: |
         {"error":"Servable not found for request"}
+
+
+  kserve:
+    enabled: false
+
+    listener:
+      address: "0.0.0.0"
+      port: 8080
+      protocol: "http"
+
+    identity:
+      product: "kserve"
+      variant: "v1-v2-compatible"
+
+    # KSERVE-COMPATIBLE API STATIC FIXTURE POLICY
+    # HTTP/REST only. Disabled by default, because TCP/8080 is
+    # already assigned to the enabled llama.cpp personality in this file.
+    #
+    # The personality exposes a compact KServe-compatible V2 inference surface
+    # plus the common KServe V1 predict/explain endpoints. Every status, header
+    # and response body below is complete literal fixture data stored in YAML.
+    # No prediction, explanation, health-state calculation, request validation,
+    # response templating, interpolation, request-id reflection or request-body
+    # dependent behavior is performed at runtime. Incoming requests are evidence
+    # only and do not affect response content.
+    #
+    # Only generic HTTP engine capabilities already used elsewhere in this file
+    # are required: exact method/path routing, immediate static responses,
+    # per-response headers and one static service-level fallback.
+    routes:
+      - method: "GET"
+        path: "/v2/health/live"
+        classification: "health_check"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            body: ""
+
+      - method: "GET"
+        path: "/v2/health/ready"
+        classification: "health_check"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            body: ""
+
+      - method: "GET"
+        path: "/v2"
+        classification: "version_discovery"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json"
+            body: >-
+              {"name":"kserve","version":"0.16.0","extensions":[]}
+
+      - method: "GET"
+        path: "/v2/models/sklearn-iris/ready"
+        classification: "health_check"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            body: ""
+
+      - method: "GET"
+        path: "/v2/models/sklearn-iris"
+        classification: "model_discovery"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json"
+            body: >-
+              {"name":"sklearn-iris","versions":["1"],"platform":"sklearn","inputs":[{"name":"input-0","datatype":"FP32","shape":[-1,4]}],"outputs":[{"name":"predict","datatype":"INT64","shape":[-1]}]}
+
+      - method: "POST"
+        path: "/v2/models/sklearn-iris/infer"
+        classification: "inference_attempt"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json"
+            body: >-
+              {"model_name":"sklearn-iris","model_version":"1","outputs":[{"name":"predict","shape":[2],"datatype":"INT64","data":[1,1]}]}
+
+      - method: "GET"
+        path: "/v2/models/sklearn-iris/versions/1"
+        classification: "model_discovery"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json"
+            body: >-
+              {"name":"sklearn-iris","versions":["1"],"platform":"sklearn","inputs":[{"name":"input-0","datatype":"FP32","shape":[-1,4]}],"outputs":[{"name":"predict","datatype":"INT64","shape":[-1]}]}
+
+      - method: "POST"
+        path: "/v1/models/sklearn-iris:predict"
+        classification: "inference_attempt"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json"
+            body: >-
+              {"predictions":[1,1]}
+
+      - method: "POST"
+        path: "/v1/models/sklearn-iris:explain"
+        classification: "inference_attempt"
+        responses:
+          - sequence: default
+            status: 200
+            response_mode: "immediate"
+            headers:
+              Content-Type: "application/json"
+            body: >-
+              {"explanations":[{"feature_importance":[0.42,0.18,0.31,0.09]}]}
+
+    # Every method/path not explicitly defined above receives one static JSON
+    # fallback. No request-dependent KServe error generation is performed.
+    default_response:
+      status: 404
+      headers:
+        Content-Type: "application/json"
+      body: |
+        {"detail":"Not Found"}
 
 # ---------------------------------------------------------------------------
 # OPTIONAL OFFLINE ANALYSIS
