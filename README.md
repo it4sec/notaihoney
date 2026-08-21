@@ -350,23 +350,19 @@ Collected archives should be stored outside `/var/lib/notaihoney`, under the inv
 
 ## 5. Next steps
 
-The current release includes enabled and tested Ollama, vLLM, NVIDIA NIM, NVIDIA Triton, Hugging Face TGI, llama.cpp server, KServe API, and TensorFlow Serving simulations.
-
-Planned work includes:
-
-- complete Milestone 1 fixture validation
-- continue malformed, slow-client, load, and resource-limit testing
-- improve deployment and evidence-handling validation
-- expand forensic analysis and indexing workflows
-- continue expanding additional AI-service simulations through `honeypot.yaml`
-
-Planned future service targets include:
-
-- additional enterprise AI APIs
-
-The guiding rule remains:
-
-> **Keep the Go engine small and generic, keep simulated service behavior in one YAML file, preserve evidence, and execute nothing requested by the attacker.**
+1. Add support for multiple capture interfaces to support services that use the same port.
+2. Add support for other operating systems.
+3. Add a dashboard generator from JSONL files.
+4. Add forensics and research scripts.
+5. Support additional engines:
+   1. SGLang
+   2. ExLlamaV2
+   3. MLC LLM
+   4. Modular MAX Serve
+   5. Friendli Engine
+   6. Google JetStream
+   7. MS DeepSpeed-FastGen
+   8. Meta PyTorch / Llama Stack
 
 ---
 
