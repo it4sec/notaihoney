@@ -172,8 +172,6 @@ Required:
 - systemd
 - **UFW installed and already active**
 
-The installer does not own the host firewall configuration. It must not enable, disable, restart, or reconfigure UFW globally.
-
 The current Ubuntu deployment also expects native `nftables.service` **not** to be active or enabled. notAIhoney uses administrator-managed UFW for exposure of validated honeypot listener ports.
 
 A Go compiler is **not required** when installing from a prebuilt release bundle.
@@ -355,14 +353,14 @@ Collected archives should be stored outside `/var/lib/notaihoney`, under the inv
 3. Add a dashboard generator from JSONL files.
 4. Add forensics and research scripts.
 5. Support additional engines:
-   1. SGLang
-   2. ExLlamaV2
-   3. MLC LLM
-   4. Modular MAX Serve
-   5. Friendli Engine
-   6. Google JetStream
-   7. MS DeepSpeed-FastGen
-   8. Meta PyTorch / Llama Stack
+   a. SGLang
+   b. ExLlamaV2
+   c. MLC LLM
+   d. Modular MAX Serve
+   e. Friendli Engine
+   f. Google JetStream
+   g. MS DeepSpeed-FastGen
+   h. Meta PyTorch / Llama Stack
 
 ---
 
