@@ -353,14 +353,14 @@ Collected archives should be stored outside `/var/lib/notaihoney`, under the inv
 3. Add a dashboard generator from JSONL files.
 4. Add forensics and research scripts.
 5. Support additional engines:
-   a. SGLang
-   b. ExLlamaV2
-   c. MLC LLM
-   d. Modular MAX Serve
-   e. Friendli Engine
-   f. Google JetStream
-   g. MS DeepSpeed-FastGen
-   h. Meta PyTorch / Llama Stack
+      1. SGLang
+      2. ExLlamaV2
+      3. MLC LLM
+      4. Modular MAX Serve
+      5. Friendli Engine
+      6. Google JetStream
+      7. MS DeepSpeed-FastGen
+      8. Meta PyTorch / Llama Stack
 
 ---
 
