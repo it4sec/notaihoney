@@ -2,7 +2,7 @@
 
 **notAIhoney** is a Linux honeypot for exposed AI inference and model-serving APIs.
 
-It presents believable AI-service endpoints, records network and application activity, and returns synthetic responses without running a real LLM or executing attacker-controlled actions.
+It simulates LLM inference engines, captures activity, and responds safely with synthetic data, with minimal resources (AWS Free Tier is 👍).
 
 **Owner:** Denis Laskov  
 **Year:** 2026  
