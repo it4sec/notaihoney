@@ -179,7 +179,7 @@ services:
 
 
   vllm:
-    enabled: false
+    enabled: true
 
     listener:
       address: "0.0.0.0"
@@ -411,7 +411,7 @@ services:
 
 
   nvidia_nim:
-    enabled: true
+    enabled: false
 
     listener:
       address: "0.0.0.0"

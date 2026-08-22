@@ -14,7 +14,7 @@ It simulates LLM inference engines, captures activity, and responds safely with 
 
 ## 1. What it does
 
-The current version includes enabled and tested simulations for:
+The current version simulates the following LLM inference engines:
 
 ```text
 Ollama               -> TCP/11434
@@ -28,6 +28,16 @@ TensorFlow Serving   -> TCP/8501
 ```
 
 > **Port conflicts:** vLLM, NVIDIA NIM, and NVIDIA Triton all use TCP/8000 in the current configuration, so on the same network interface only one of those three can be enabled at a time. llama.cpp server and KServe API both use TCP/8080, so on the same network interface only one of those two can be enabled at a time.
+
+**By default enabled:** 
+
+```text
+Ollama               -> TCP/11434
+vLLM                 -> TCP/8000
+Hugging Face TGI     -> TCP/3000
+llama.cpp server     -> TCP/8080
+TensorFlow Serving   -> TCP/8501
+```
 
 ### Ollama
 
@@ -276,9 +286,19 @@ sudo systemctl status notaihoney.service
 
 The capture service must be healthy before the public honeypot service is allowed to run.
 
+## 4. How to change default configuration:
+
+
+To change the configuration, edit honeypot.yaml and re-run the installer script. 
+```text
+services:
+  ollama:
+    enabled: true
+```
+
 ---
 
-## 4. How to use the output files
+## 5. How to use the output files
 
 The main evidence directory is:
 
@@ -346,7 +366,7 @@ Collected archives should be stored outside `/var/lib/notaihoney`, under the inv
 
 ---
 
-## 5. Next steps
+## 6. Next steps
 
 1. Add support for multiple capture interfaces to support services that use the same port.
 2. Add support for other operating systems.
@@ -364,7 +384,7 @@ Collected archives should be stored outside `/var/lib/notaihoney`, under the inv
 
 ---
 
-## 6. Credits
+## 7. Credits
 
 **notAIhoney** was created and is maintained by **Denis Laskov**.
 
